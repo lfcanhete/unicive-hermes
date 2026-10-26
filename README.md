@@ -27,7 +27,6 @@ O Hermes aprende com as correções e oferece criar skills novas; a Pauta pede a
 **Importante para o Google:** se o Workspace da UniCIVE for institucional, a TI pode precisar liberar o app OAuth (Admin Console > Segurança > Controles de API). Idealmente a TI cria um único cliente OAuth para todos; não publique o arquivo de credenciais no repositório.
 
 ## Antes da oficina
-- Troque `canhetejr` nos scripts pelo usuário/organização do GitHub.
 - Teste em uma máquina limpa.
 - Teste o login OAuth com uma conta Claude Pro (a documentação do Hermes pode citar exigência de plano maior; confirme na prática). Plano B: chave de API da instituição.
 - Nunca coloque chaves de API neste repositório.
