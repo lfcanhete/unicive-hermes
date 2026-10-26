@@ -1,8 +1,8 @@
 # UniCIVE · Instalador do Hermes Agent (Windows)
-# Uso:  iex (irm https://raw.githubusercontent.com/canhetejr/unicive-hermes/main/install.ps1)
+# Uso:  iex (irm https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main/install.ps1)
 
 $ErrorActionPreference = "Stop"
-$Repo = "https://raw.githubusercontent.com/canhetejr/unicive-hermes/main"
+$Repo = "https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main"
 $Skills = @("pauta", "resumo-reuniao", "oficio-institucional")
 
 function Passo($n, $msg) { Write-Host "`n[$n] $msg" -ForegroundColor Cyan }

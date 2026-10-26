@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # UniCIVE · Instalador do Hermes Agent (macOS / Linux / WSL2)
-# Uso:  curl -fsSL https://raw.githubusercontent.com/canhetejr/unicive-hermes/main/install.sh | bash
+# Uso:  curl -fsSL https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main/install.sh | bash
 set -euo pipefail
 
-REPO="https://raw.githubusercontent.com/canhetejr/unicive-hermes/main"
+REPO="https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main"
 SKILLS=(pauta resumo-reuniao oficio-institucional)
 
 passo() { printf '\n\033[36m[%s] %s\033[0m\n' "$1" "$2"; }

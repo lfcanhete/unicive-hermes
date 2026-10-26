@@ -2,12 +2,12 @@
 
 ## Windows (PowerShell)
 ```powershell
-iex (irm https://raw.githubusercontent.com/canhetejr/unicive-hermes/main/install.ps1)
+iex (irm https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main/install.ps1)
 ```
 
 ## macOS / Linux
 ```bash
-curl -fsSL https://raw.githubusercontent.com/canhetejr/unicive-hermes/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main/install.sh | bash
 ```
 
 O script instala o Hermes, define o Claude como modelo, instala as skills da UniCIVE (`skills/`) e abre o login no navegador.
