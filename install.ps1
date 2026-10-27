@@ -59,6 +59,24 @@ try {
         $env:Path += ";$pasta"
     }
 
+    # Aplicativo (Hermes Desktop): se o instalador oficial parou antes dele, refaz so essa parte.
+    $instLocal = Join-Path $HermesHome "hermes-agent\scripts\install.ps1"
+    $atalho = Join-Path ([Environment]::GetFolderPath("Desktop")) "Hermes.lnk"
+    $appExe = Join-Path $HermesHome "hermes-agent\apps\desktop\release\win-unpacked\Hermes.exe"
+    if ((Test-Path $instLocal) -and -not (Test-Path $atalho)) {
+        Write-Host "Instalando o aplicativo Hermes Desktop (pode levar alguns minutos)..."
+        # Pode terminar com erro na etapa do launcher mesmo com o app pronto; o que vale e o Hermes.exe.
+        if (Test-Path (Join-Path $HermesHome ".hermes-update-in-progress")) { Remove-Item (Join-Path $HermesHome ".hermes-update-in-progress") -Force -ErrorAction SilentlyContinue }
+        powershell -NoProfile -ExecutionPolicy Bypass -File $instLocal -Stage products -IncludeDesktop
+    }
+    if ((Test-Path $appExe) -and -not (Test-Path $atalho)) {
+        $ws = New-Object -ComObject WScript.Shell
+        foreach ($dir in @([Environment]::GetFolderPath("Desktop"), [Environment]::GetFolderPath("Programs"))) {
+            $sc = $ws.CreateShortcut((Join-Path $dir "Hermes.lnk")); $sc.TargetPath = $appExe; $sc.WorkingDirectory = Split-Path $appExe; $sc.Save()
+        }
+        Write-Host "Atalho do Hermes criado na area de trabalho." -ForegroundColor Green
+    }
+
     Passo 2 "Configurando o Claude como modelo"
     & $HermesExe config set model.provider anthropic
     & $HermesExe config set model.default $Modelo
