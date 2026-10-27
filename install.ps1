@@ -5,7 +5,7 @@
 # Continue: no PowerShell 5.1 o stderr de programas externos (ex.: aviso do hermes) viraria erro fatal com "Stop".
 $ErrorActionPreference = "Continue"
 $Repo   = "https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main"
-$Modelo = "claude-sonnet-4-6"
+$Modelo = "claude-sonnet-5-5"
 # categoria\nome de cada skill extra
 $Skills = @("productivity\resumo-reuniao", "productivity\oficio-institucional")
 $Local  = if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot "SOUL.md"))) { $PSScriptRoot } else { $null }

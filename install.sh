@@ -4,7 +4,7 @@
 set -uo pipefail
 
 REPO="https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main"
-MODELO="claude-sonnet-4-6"
+MODELO="claude-sonnet-5-5"
 SKILLS=(resumo-reuniao oficio-institucional)
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 
