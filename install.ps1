@@ -32,6 +32,13 @@ try {
         # O instalador oficial fecha a janela ao terminar; roda em um processo separado.
         powershell -NoProfile -ExecutionPolicy Bypass -Command "iex (irm https://hermes-agent.nousresearch.com/install.ps1)"
         $env:Path = [Environment]::GetEnvironmentVariable("Path","User") + ";" + [Environment]::GetEnvironmentVariable("Path","Machine")
+        if (-not (AcharHermes)) {
+            # A versao estavel no Windows as vezes nao publica o hermes.exe; a "main" ja tem a correcao.
+            Write-Host "Tentando de novo com a versao mais recente do Hermes..." -ForegroundColor Yellow
+            $env:HERMES_INSTALL_CHANNEL = "main"
+            powershell -NoProfile -ExecutionPolicy Bypass -Command "iex (irm https://hermes-agent.nousresearch.com/install.ps1)"
+            $env:Path = [Environment]::GetEnvironmentVariable("Path","User") + ";" + [Environment]::GetEnvironmentVariable("Path","Machine")
+        }
     } else {
         Write-Host "Hermes ja instalado."
     }
