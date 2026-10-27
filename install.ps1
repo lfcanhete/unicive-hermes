@@ -73,13 +73,12 @@ try {
 
     Passo 4 "Credenciais (Claude e Google)"
     $semBom = New-Object System.Text.UTF8Encoding($false)
-    # Chave do Claude: vem no comando enviado pela UniCIVE (UNICIVE_KEY); so pergunta se faltar.
+    # Chave do Claude (opcional): se a UniCIVE enviar UNICIVE_KEY no comando, usa a chave;
+    # senao abre o login do Claude no navegador.
     $key = $env:UNICIVE_KEY
     if (-not $key) {
-        try {
-            $sec = Read-Host "Cole a chave que a UniCIVE te entregou (Enter para pular)" -AsSecureString
-            $key = [System.Net.NetworkCredential]::new("", $sec).Password
-        } catch { $key = "" }
+        Write-Host "Vai abrir o navegador: entre com a sua conta do Claude e autorize." -ForegroundColor Yellow
+        & $HermesExe auth add anthropic --type oauth
     }
     if ($key) {
         $envFile = Join-Path $HermesHome ".env"
@@ -87,8 +86,6 @@ try {
         $linhas += "ANTHROPIC_API_KEY=$key"
         [System.IO.File]::WriteAllLines($envFile, [string[]]$linhas, $semBom)
         Write-Host "Chave do Claude salva."
-    } else {
-        Write-Host "Chave nao informada. Rode de novo o instalador quando tiver a chave." -ForegroundColor Yellow
     }
     # Cliente OAuth do Google da UniCIVE (UNICIVE_GOOGLE = arquivo client_secret.json em base64).
     if ($env:UNICIVE_GOOGLE) {
@@ -102,7 +99,7 @@ try {
     $primeira = Join-Path $HermesHome "primeira-mensagem.txt"
     Pegar "primeira-mensagem.txt" $primeira
     Write-Host "Abrindo a Pauta..." -ForegroundColor Green
-    & $HermesExe chat --query-file $primeira -s google-workspace
+    & $HermesExe chat --query-file $primeira
 }
 catch {
     Write-Host "`nERRO: $($_.Exception.Message)" -ForegroundColor Red
