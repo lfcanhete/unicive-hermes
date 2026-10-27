@@ -20,10 +20,14 @@ try {
     $HermesHome = if ($env:HERMES_HOME) { $env:HERMES_HOME } else { Join-Path $env:LOCALAPPDATA "hermes" }
     $HermesExe  = Join-Path $HermesHome "bin\hermes.exe"
 
+    # O instalador oficial pode deixar so o hermes.cmd dentro da pasta do projeto.
+    $HermesCmd = Join-Path $HermesHome "hermes-agent\.hermes\bin\hermes.cmd"
+
     function AcharHermes {
         if (Test-Path $HermesExe) { return $HermesExe }
         $cmd = Get-Command hermes -ErrorAction SilentlyContinue
         if ($cmd) { return $cmd.Source }
+        if (Test-Path $HermesCmd) { return $HermesCmd }
         return $null
     }
 
@@ -32,19 +36,27 @@ try {
         # O instalador oficial fecha a janela ao terminar; roda em um processo separado.
         powershell -NoProfile -ExecutionPolicy Bypass -Command "iex (irm https://hermes-agent.nousresearch.com/install.ps1)"
         $env:Path = [Environment]::GetEnvironmentVariable("Path","User") + ";" + [Environment]::GetEnvironmentVariable("Path","Machine")
-        if (-not (AcharHermes)) {
-            # A versao estavel no Windows as vezes nao publica o hermes.exe; a "main" ja tem a correcao.
-            Write-Host "Tentando de novo com a versao mais recente do Hermes..." -ForegroundColor Yellow
-            $env:HERMES_INSTALL_CHANNEL = "main"
-            powershell -NoProfile -ExecutionPolicy Bypass -Command "iex (irm https://hermes-agent.nousresearch.com/install.ps1)"
-            $env:Path = [Environment]::GetEnvironmentVariable("Path","User") + ";" + [Environment]::GetEnvironmentVariable("Path","Machine")
-        }
     } else {
         Write-Host "Hermes ja instalado."
     }
     $achado = AcharHermes
     if (-not $achado) { throw "O Hermes nao foi encontrado depois da instalacao. Feche esta janela, abra o PowerShell de novo e rode o comando outra vez." }
     $HermesExe = $achado
+
+    # Em alguns PCs o instalador para na etapa de dependencias; o proprio Hermes sabe se reparar.
+    Write-Host "Verificando a instalacao..."
+    $versao = (& $HermesExe --version 2>&1 | Out-String)
+    if ($versao -notmatch "Hermes Agent v") {
+        Write-Host "Completando a instalacao (reparo automatico)..." -ForegroundColor Yellow
+        & $HermesExe pm repair
+    }
+    # Deixa o comando "hermes" disponivel em novas janelas do PowerShell.
+    $pasta = Split-Path $HermesExe
+    $userPath = [Environment]::GetEnvironmentVariable("Path","User")
+    if (-not (($userPath -split ';') -contains $pasta)) {
+        [Environment]::SetEnvironmentVariable("Path", ($userPath.TrimEnd(';') + ";" + $pasta), "User")
+        $env:Path += ";$pasta"
+    }
 
     Passo 2 "Configurando o Claude como modelo"
     & $HermesExe config set model.provider anthropic
