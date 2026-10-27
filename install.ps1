@@ -71,7 +71,9 @@ try {
         Pegar "skills\$nome\SKILL.md" (Join-Path $HermesHome "skills\$s\SKILL.md")
     }
 
-    Passo 4 "Chave de acesso ao Claude"
+    Passo 4 "Credenciais (Claude e Google)"
+    $semBom = New-Object System.Text.UTF8Encoding($false)
+    # Chave do Claude: vem no comando enviado pela UniCIVE (UNICIVE_KEY); so pergunta se faltar.
     $key = $env:UNICIVE_KEY
     if (-not $key) {
         try {
@@ -83,16 +85,24 @@ try {
         $envFile = Join-Path $HermesHome ".env"
         $linhas = if (Test-Path $envFile) { @(Get-Content $envFile | Where-Object { $_ -notmatch '^ANTHROPIC_API_KEY=' }) } else { @() }
         $linhas += "ANTHROPIC_API_KEY=$key"
-        Set-Content -Path $envFile -Value $linhas -Encoding UTF8
-        Write-Host "Chave salva."
+        [System.IO.File]::WriteAllLines($envFile, [string[]]$linhas, $semBom)
+        Write-Host "Chave do Claude salva."
     } else {
         Write-Host "Chave nao informada. Rode de novo o instalador quando tiver a chave." -ForegroundColor Yellow
     }
+    # Cliente OAuth do Google da UniCIVE (UNICIVE_GOOGLE = arquivo client_secret.json em base64).
+    if ($env:UNICIVE_GOOGLE) {
+        $json = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:UNICIVE_GOOGLE))
+        if ($json -notmatch '"installed"') { throw "UNICIVE_GOOGLE nao parece um client_secret.json do Google." }
+        [System.IO.File]::WriteAllText((Join-Path $HermesHome "google_client_secret.json"), $json, $semBom)
+        Write-Host "Cliente do Google instalado."
+    }
 
     Passo 5 "Pronto"
+    $primeira = Join-Path $HermesHome "primeira-mensagem.txt"
+    Pegar "primeira-mensagem.txt" $primeira
     Write-Host "Abrindo a Pauta..." -ForegroundColor Green
-    Write-Host "Na primeira conversa, diga: 'Pauta, configure meu Google Workspace'." -ForegroundColor Yellow
-    & $HermesExe
+    & $HermesExe chat --query-file $primeira -s google-workspace
 }
 catch {
     Write-Host "`nERRO: $($_.Exception.Message)" -ForegroundColor Red
