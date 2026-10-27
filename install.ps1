@@ -2,7 +2,8 @@
 # Uso:  iex (irm https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main/install.ps1)
 # Este script nunca usa "exit", para nao fechar a janela do PowerShell.
 
-$ErrorActionPreference = "Stop"
+# Continue: no PowerShell 5.1 o stderr de programas externos (ex.: aviso do hermes) viraria erro fatal com "Stop".
+$ErrorActionPreference = "Continue"
 $Repo   = "https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main"
 $Modelo = "claude-sonnet-4-6"
 # categoria\nome de cada skill extra
@@ -11,9 +12,9 @@ $Local  = if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot "SOUL.md"))
 
 function Passo($n, $msg) { Write-Host "`n[$n/5] $msg" -ForegroundColor Cyan }
 function Pegar($rel, $destino) {
-    New-Item -ItemType Directory -Force -Path (Split-Path $destino) | Out-Null
-    if ($Local) { Copy-Item (Join-Path $Local $rel) $destino -Force }
-    else { Invoke-WebRequest "$Repo/$rel" -OutFile $destino -UseBasicParsing }
+    New-Item -ItemType Directory -Force -Path (Split-Path $destino) -ErrorAction Stop | Out-Null
+    if ($Local) { Copy-Item (Join-Path $Local $rel) $destino -Force -ErrorAction Stop }
+    else { Invoke-WebRequest "$Repo/$rel" -OutFile $destino -UseBasicParsing -ErrorAction Stop }
 }
 
 try {
