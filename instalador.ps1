@@ -155,6 +155,9 @@ $TarefaInstalar = {
     Sub 2 "ativo"
     [void](Executar $hx @("config", "set", "model.provider", "anthropic"))
     [void](Executar $hx @("config", "set", "model.default", $cfg.Modelo))
+    # Respostas mais rapidas e menos uso da cota do plano: raciocinio baixo e sem chamada extra para titulo.
+    [void](Executar $hx @("config", "set", "--force", "agent.reasoning_effort", "low"))
+    [void](Executar $hx @("config", "set", "auxiliary.title_generation.enabled", "false"))
     $soul = Join-Path $HermesHome "SOUL.md"
     if (-not $cfg.Demo -and (Test-Path $soul) -and -not (Test-Path "$soul.original")) { Copy-Item $soul "$soul.original" }
     Pegar "SOUL.md" $soul
@@ -320,7 +323,7 @@ $TarefaTelegram = {
 [xml]$xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Instalar a Pauta · UNICIVE" Width="940" Height="700" WindowStartupLocation="CenterScreen"
+        Title="Instalar a Pauta · UNICIVE" Width="940" Height="736" WindowStartupLocation="CenterScreen"
         ResizeMode="CanMinimize" Background="#F0F8F4" FontFamily="Segoe UI" FontSize="14" Foreground="#122B23">
   <Window.Resources>
     <Style x:Key="Primario" TargetType="Button">
@@ -360,7 +363,16 @@ $TarefaTelegram = {
     </Style>
   </Window.Resources>
   <Grid>
+    <Grid.RowDefinitions><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition/></Grid.ColumnDefinitions>
+    <Border Grid.Row="1" Grid.ColumnSpan="2" Background="#00382D" Padding="26,9">
+      <DockPanel>
+        <TextBlock x:Name="TxtPct" DockPanel.Dock="Right" Foreground="#FFC571" FontWeight="Bold" FontSize="12" Width="40" TextAlignment="Right" VerticalAlignment="Center" Text="0%"/>
+        <ProgressBar x:Name="BarraGeral" DockPanel.Dock="Right" Width="220" Height="8" Margin="16,0,8,0" Minimum="0" Maximum="100"
+                     Foreground="#5BDC9E" Background="#0F5A48" BorderThickness="0" VerticalAlignment="Center"/>
+        <TextBlock x:Name="TxtStatus" Foreground="#A8CFC0" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+      </DockPanel>
+    </Border>
     <Border Background="#004A3B">
       <DockPanel Margin="26,30">
         <StackPanel DockPanel.Dock="Top">
@@ -515,6 +527,7 @@ function Marcar($item, [string]$estado) {
 
 $nomesPassos = @("Boas-vindas", "Instalação", "Claude", "Google", "Telegram", "Pronto")
 $titulos = @("Vamos deixar a Pauta pronta", "Instalando o Hermes e a Pauta", "Conecte o Claude", "Conecte o Google", "Conecte o Telegram", "Tudo pronto!")
+$statusPadrao = @("Pronto para começar", "Instalando... pode levar alguns minutos", "Aguardando o login do Claude", "Aguardando o login do Google", "Aguardando o Telegram", "Instalação concluída")
 $passos = @()
 for ($i = 0; $i -lt $nomesPassos.Count; $i++) {
     $it = NovoItem $nomesPassos[$i] "$($i + 1)" $true
@@ -558,6 +571,7 @@ function IrPara([int]$i) {
     Marcar $passos[$i] "ativo"
     $TxtPasso.Text = "PASSO $($i + 1) DE $($passos.Count)"
     $TxtTitulo.Text = $titulos[$i]
+    $TxtStatus.Text = $statusPadrao[$i]
     $BtnPular.Visibility = $(if ($i -eq 3 -or $i -eq 4) { "Visible" } else { "Collapsed" })
     $BtnAvancar.Content = $(if ($i -eq 0) { "Começar" } elseif ($i -eq 5) { "Concluir" } else { "Continuar" })
     $BtnAvancar.IsEnabled = ($i -eq 0 -or $i -eq 5)
@@ -704,8 +718,21 @@ $timer = New-Object Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMilliseconds(150)
 $timer.Add_Tick({
     $m = $null
-    while ($sync.Log.TryDequeue([ref]$m)) { $TxtLog.AppendText($m + "`r`n"); $TxtLog.ScrollToEnd() }
+    while ($sync.Log.TryDequeue([ref]$m)) {
+        $TxtLog.AppendText($m + "`r`n"); $TxtLog.ScrollToEnd()
+        # A barra de status mostra a ultima linha do que esta acontecendo, sem os enfeites do terminal.
+        $limpa = ($m -replace '[^\p{L}\p{N}\p{P}\p{Zs}]', '').Trim()
+        if ($script:tarefa -and $limpa.Length -gt 3) { $TxtStatus.Text = $limpa }
+    }
     while ($sync.Sub.TryDequeue([ref]$m)) { $p = $m -split '\|'; Marcar $subs[[int]$p[0]] $p[1] }
+    if (-not $script:tarefa -and $TxtStatus.Text -ne $statusPadrao[$script:pagina] -and -not $sync.ClaudeEsperando) { $TxtStatus.Text = $statusPadrao[$script:pagina] }
+
+    # Percentual geral: passos concluidos, e na instalacao a fracao das sub-etapas.
+    $feitos = @($passos | Where-Object { $_.Estado -eq "ok" -or $_.Estado -eq "pulado" }).Count
+    $fracao = 0
+    if ($passos[1].Estado -eq "ativo" -or $passos[1].Estado -eq "erro") { $fracao = @($subs | Where-Object { $_.Estado -eq "ok" -or $_.Estado -eq "pulado" }).Count / $subs.Count }
+    $pct = [int][Math]::Floor(($feitos + $fracao) / $passos.Count * 100)
+    if ($BarraGeral.Value -ne $pct) { $BarraGeral.Value = $pct; $TxtPct.Text = "$pct%" }
 
     if ($sync.ClaudeEsperando -and $script:pagina -eq 2) {
         if ($CaixaCodigo.Visibility -ne "Visible") { $CaixaCodigo.Visibility = "Visible"; Status $TxtClaude "Aguardando o código do Claude..." "" }

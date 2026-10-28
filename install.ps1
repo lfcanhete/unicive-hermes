@@ -80,6 +80,9 @@ try {
     Passo 2 "Configurando o Claude como modelo"
     & $HermesExe config set model.provider anthropic
     & $HermesExe config set model.default $Modelo
+    # Respostas mais rapidas e menos uso da cota do plano: raciocinio baixo e sem chamada extra para titulo.
+    & $HermesExe config set --force agent.reasoning_effort low
+    & $HermesExe config set auxiliary.title_generation.enabled false
 
     Passo 3 "Instalando a Pauta e as skills da UniCIVE"
     $soul = Join-Path $HermesHome "SOUL.md"
