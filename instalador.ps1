@@ -696,9 +696,15 @@ function IrPara([int]$i) {
     switch ($i) {
         1 { IniciarInstalacao }
         2 {
-            if (-not $cfg.Demo -and (Test-Path (Join-Path $HermesHome ".anthropic_oauth.json"))) {
-                Status $TxtClaude "✓  Este computador já está conectado ao Claude. Pode continuar, ou entrar de novo com outra conta." "ok"
-                $BtnClaude.Content = "Entrar de novo"; $BtnAvancar.IsEnabled = $true
+            # O login fica no cofre do Hermes (nao em arquivo): pergunta ao proprio Hermes.
+            if (-not $cfg.Demo -and -not $script:tarefa) {
+                $sync.ClaudeJa = $false
+                Rodar { [void](Executar (AcharHermes) @("auth", "list") -Quieto); $sync.ClaudeJa = ($script:saida -match 'hermes_pkce') } {
+                    if ($sync.ClaudeJa -and $script:pagina -eq 2 -and -not $script:feito[2]) {
+                        Status $TxtClaude "✓  Este computador já está conectado ao Claude. Pode continuar, ou entrar de novo com outra conta." "ok"
+                        $BtnClaude.Content = "Entrar de novo"; $BtnAvancar.IsEnabled = $true
+                    }
+                }
             }
         }
         3 {
