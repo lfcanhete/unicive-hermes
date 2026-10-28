@@ -67,7 +67,13 @@ $Comum = {
     function Executar([string]$exe, [string[]]$argumentos) {
         $script:saida = ""
         if ($cfg.Demo) { Log "[demo] $exe $($argumentos -join ' ')"; Start-Sleep -Milliseconds 900; $script:saida = "Hermes Agent v0"; return 0 }
-        $p = [Diagnostics.Process]::Start((NovoProcesso $exe $argumentos))
+        $psi = NovoProcesso $exe $argumentos
+        # Ninguem ve as perguntas do terminal: o Hermes usa a resposta padrao (no gateway, a pasta
+        # Inicializar do Windows em vez da tarefa agendada que pede administrador).
+        $psi.EnvironmentVariables["HERMES_NONINTERACTIVE"] = "1"
+        $psi.RedirectStandardInput = $true
+        $p = [Diagnostics.Process]::Start($psi)
+        $p.StandardInput.Close()
         $erros = $p.StandardError.ReadToEndAsync()
         $tudo = New-Object Text.StringBuilder
         while ($null -ne ($l = $p.StandardOutput.ReadLine())) { Log $l; [void]$tudo.AppendLine($l) }
