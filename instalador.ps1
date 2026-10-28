@@ -69,7 +69,7 @@ $Comum = {
     }
 
     # Roda um programa, manda a saida para "Ver detalhes" e devolve o codigo de saida.
-    function Executar([string]$exe, [string[]]$argumentos) {
+    function Executar([string]$exe, [string[]]$argumentos, [switch]$Quieto) {
         $script:saida = ""
         if ($cfg.Demo) { Log "[demo] $exe $($argumentos -join ' ')"; Start-Sleep -Milliseconds 900; $script:saida = "Hermes Agent v0"; return 0 }
         $psi = NovoProcesso $exe $argumentos
@@ -81,9 +81,9 @@ $Comum = {
         $p.StandardInput.Close()
         $erros = $p.StandardError.ReadToEndAsync()
         $tudo = New-Object Text.StringBuilder
-        while ($null -ne ($l = $p.StandardOutput.ReadLine())) { Log $l; [void]$tudo.AppendLine($l) }
+        while ($null -ne ($l = $p.StandardOutput.ReadLine())) { if (-not $Quieto) { Log $l }; [void]$tudo.AppendLine($l) }
         $p.WaitForExit()
-        foreach ($l in ($erros.Result -split "`r?`n")) { if ($l) { Log $l; [void]$tudo.AppendLine($l) } }
+        foreach ($l in ($erros.Result -split "`r?`n")) { if ($l) { if (-not $Quieto) { Log $l }; [void]$tudo.AppendLine($l) } }
         $script:saida = $tudo.ToString()
         return $p.ExitCode
     }
@@ -101,14 +101,12 @@ $Comum = {
         if (Test-Path $arq) {
             $linhas = @(Get-Content $arq | Where-Object { $l = $_; -not ($valores.Keys | Where-Object { $l -match "^$_=" }) })
         }
-        foreach ($k in $valores.Keys) { $linhas += "$k=$($valores[$k])" }
+        # Valor $null remove a chave.
+        foreach ($k in $valores.Keys) { if ($null -ne $valores[$k]) { $linhas += "$k=$($valores[$k])" } }
         [IO.File]::WriteAllLines($arq, [string[]]$linhas, (New-Object Text.UTF8Encoding($false)))
     }
 
     function B64Url([byte[]]$b) { [Convert]::ToBase64String($b).TrimEnd('=').Replace('+', '-').Replace('/', '_') }
-
-    # A virgula impede o PowerShell de desmontar o byte[] em uma lista de numeros.
-    function JsonUtf8($obj) { return , [Text.Encoding]::UTF8.GetBytes(($obj | ConvertTo-Json -Depth 5)) }
 }
 
 $TarefaInstalar = {
@@ -289,39 +287,48 @@ $TarefaGoogle = {
     } catch { Log "Não consegui ler o endereço do Gmail: $($_.Exception.Message)" }
 }
 
-$TarefaVerificarBot = {
-    if ($cfg.Demo) { Start-Sleep 1; $sync.TgBot = "assessor_direcao_bot"; return }
-    try { $r = Invoke-RestMethod "https://api.telegram.org/bot$($sync.TgToken)/getMe" -UseBasicParsing }
-    catch { throw "O Telegram não reconheceu este token. Copie de novo a mensagem do BotFather." }
-    $sync.TgBot = $r.result.username
-}
-
+# O PowerShell nunca fala com o Telegram: script mandando dados para um robo do Telegram e o padrao
+# que o antivirus procura (e mata). Quem conversa com o Telegram e o proprio Hermes; o instalador so
+# grava o token, liga o gateway e aprova o pareamento do dono pelo comando do Hermes.
 $TarefaTelegram = {
-    if ($cfg.Demo) { Start-Sleep 4; $sync.TgNome = "Diretor"; [void](Executar "hermes.exe" @("gateway", "install")); return }
-    $base = "https://api.telegram.org/bot$($sync.TgToken)"
-    # Ignora mensagens antigas: so vale a que chegar agora.
-    $offset = 0
-    foreach ($x in (Invoke-RestMethod "$base/getUpdates?timeout=0" -UseBasicParsing).result) { $offset = [Math]::Max($offset, [int64]$x.update_id + 1) }
-    Log "Aguardando a sua mensagem no Telegram..."
-    $de = $null
-    while (-not $de) {
-        if ($sync.Cancelar) { throw "Cancelado." }
-        $u = Invoke-RestMethod "$base/getUpdates?timeout=15&offset=$offset" -TimeoutSec 25 -UseBasicParsing
-        foreach ($x in $u.result) {
-            $offset = [int64]$x.update_id + 1
-            if ($x.message -and $x.message.chat.type -eq "private") { $de = $x.message.from }
-        }
-    }
-    [void](Invoke-RestMethod "$base/getUpdates?offset=$offset&timeout=0" -UseBasicParsing)
-    $sync.TgNome = $de.first_name
-    Log "Mensagem recebida de $($de.first_name) (id $($de.id))."
-    SalvarEnv @{ TELEGRAM_BOT_TOKEN = $sync.TgToken; TELEGRAM_ALLOWED_USERS = "$($de.id)"; TELEGRAM_HOME_CHANNEL = "$($de.id)" }
-    $texto = "Olá, $($de.first_name)! Aqui é o Assessor, assistente da direção do UNICIVE. A partir de agora você também pode falar comigo por aqui."
-    [void](Invoke-RestMethod -Method Post "$base/sendMessage" -ContentType "application/json; charset=utf-8" -Body (JsonUtf8 @{ chat_id = $de.id; text = $texto }) -UseBasicParsing)
+    if ($cfg.Demo) { Start-Sleep 2; $sync.TgPronto = $true; Start-Sleep 4; $sync.TgNome = "Diretor"; return }
     $hx = AcharHermes
-    Log "Deixando o Assessor ligado no Telegram (inicia junto com o Windows)..."
+    $logGw = Join-Path $HermesHome "logs\gateway.log"
+    function Contar([string]$padrao) { if (Test-Path $logGw) { @(Select-String -Path $logGw -Pattern $padrao).Count } else { 0 } }
+    # Sem lista de usuarios autorizados, o Hermes responde ao primeiro oi com um codigo de pareamento.
+    SalvarEnv @{ TELEGRAM_BOT_TOKEN = $sync.TgToken; TELEGRAM_ALLOWED_USERS = $null; TELEGRAM_HOME_CHANNEL = $null }
+    [void](Executar $hx @("pairing", "clear-pending"))
+    $conectados = Contar "telegram connected"; $recusados = Contar "InvalidToken|Unauthorized|token.*(invalid|rejected)"
+    Log "Ligando o Assessor no Telegram (inicia junto com o Windows)..."
     [void](Executar $hx @("gateway", "install", "--if-missing", "--start-now", "--start-on-login"))
     [void](Executar $hx @("gateway", "restart"))
+    $inicio = Get-Date
+    while ((Contar "telegram connected") -le $conectados) {
+        if ($sync.Cancelar) { throw "Cancelado." }
+        if ((Contar "InvalidToken|Unauthorized|token.*(invalid|rejected)") -gt $recusados) { throw "O Telegram não aceitou este token. Copie de novo a mensagem do BotFather." }
+        if (((Get-Date) - $inicio).TotalSeconds -gt 150) { throw "O Assessor não conseguiu se conectar ao Telegram." }
+        Start-Sleep 2
+    }
+    $sync.TgPronto = $true
+    Log "Conectado ao Telegram. Aguardando a sua mensagem..."
+    $inicio = Get-Date
+    while ($true) {
+        if ($sync.Cancelar) { throw "Cancelado." }
+        if (((Get-Date) - $inicio).TotalMinutes -gt 15) { throw "Não chegou nenhuma mensagem no robô." }
+        Start-Sleep 3
+        [void](Executar $hx @("pairing", "list") -Quieto)
+        $m = [regex]::Match($script:saida, '(?m)^\s*telegram\s+(\S+)\s+(\S+)\s+(.*?)\s+\d+m ago')
+        if ($m.Success -and $m.Groups[1].Value -ne "-") {
+            $sync.TgNome = $m.Groups[3].Value.Trim()
+            $id = $m.Groups[2].Value
+            Log "Mensagem recebida de $($sync.TgNome). Aprovando..."
+            if ((Executar $hx @("pairing", "approve", "telegram", $m.Groups[1].Value)) -ne 0) { throw "Não consegui aprovar o seu acesso ao robô." }
+            SalvarEnv @{ TELEGRAM_HOME_CHANNEL = $id }
+            $nome = $(if ($sync.TgNome) { ", $(($sync.TgNome -split ' ')[0])" } else { "" })
+            [void](Executar $hx @("send", "-t", "telegram:$id", "Olá$nome! Aqui é o Assessor, assistente da direção do UNICIVE. Pronto: a partir de agora você pode falar comigo por aqui."))
+            return
+        }
+    }
 }
 
 # ---------- Janela ----------
@@ -469,7 +476,7 @@ $TarefaTelegram = {
               <Border Style="{StaticResource Cartao}">
                 <StackPanel>
                   <TextBlock FontWeight="SemiBold" Text="3.  Diga oi para o seu robô"/>
-                  <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" Text="Abra o seu robô e toque em Iniciar (ou mande um oi). Assim ele fica sabendo que você é o dono."/>
+                  <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" Text="Quando o instalador avisar, abra o seu robô e toque em Iniciar (ou mande um oi). Assim ele fica sabendo que você é o dono."/>
                   <Button x:Name="BtnAbrirBot" Style="{StaticResource Secundario}" Content="Abrir o meu robô" HorizontalAlignment="Left" Margin="0,10,0,0" Padding="18,7" IsEnabled="False"/>
                   <TextBlock x:Name="TxtTelegram" Margin="0,8,0,0" TextWrapping="Wrap" FontWeight="SemiBold"/>
                 </StackPanel>
@@ -563,6 +570,7 @@ function Rodar([scriptblock]$Bloco, [scriptblock]$AoTerminar) {
 function Status($controle, [string]$texto, [string]$tipo) {
     $controle.Text = $texto
     Registrar "[tela] $texto"
+    try { $controle.BringIntoView() } catch {}
     $controle.Foreground = Cor $(switch ($tipo) { "ok" { "#2F7A4E" } "erro" { "#B0472F" } default { "#006652" } })
 }
 
@@ -692,19 +700,16 @@ function VerificarToken {
     if ($script:tarefa) { return }
     $t = ($TxtToken.Text -replace '\s', '')
     if ($t -notmatch '^\d{5,15}:[\w-]{30,}$') { Status $TxtTokenOk "Isso não parece um token. Ele tem números, dois-pontos e letras, assim: 123456789:AAH..." "erro"; return }
-    $sync.TgToken = $t; $sync.TgBot = $null; $sync.Cancelar = $false
-    Status $TxtTokenOk "Conferindo com o Telegram..." ""
-    Rodar $TarefaVerificarBot {
-        if ($sync.Erro) { Status $TxtTokenOk $sync.Erro "erro"; return }
-        Status $TxtTokenOk "✓  Robô encontrado: @$($sync.TgBot)" "ok"
-        $BtnAbrirBot.IsEnabled = $true; $BtnAbrirBot.Content = "Abrir @$($sync.TgBot)"
-        Status $TxtTelegram "Esperando o seu oi no Telegram..." ""
-        Rodar $TarefaTelegram {
-            if ($sync.Erro) { if ($sync.Erro -ne "Cancelado.") { Status $TxtTelegram "Não deu certo: $($sync.Erro)" "erro" } }
-            else {
-                Status $TxtTelegram "✓  Recebi o seu oi, $($sync.TgNome)! O Assessor já respondeu por lá e fica ligado sempre que o computador estiver ligado." "ok"
-                Concluir 4 "ok"; $BtnAvancar.IsEnabled = $true; $BtnPular.Visibility = "Collapsed"
-            }
+    $sync.TgToken = $t; $sync.TgPronto = $false; $sync.Cancelar = $false; $script:tgAvisado = $false
+    $sync.TgBot = $(if ($cfg.Demo -and -not $script:botUser) { "assessor_direcao_bot" } else { $script:botUser })
+    Status $TxtTokenOk "✓  Token recebido. Ligando o Assessor no Telegram (pode levar até 1 minuto)..." "ok"
+    Rodar $TarefaTelegram {
+        if ($sync.Erro) {
+            if ($sync.Erro -ne "Cancelado.") { Status $TxtTelegram "Não deu certo: $($sync.Erro)" "erro" }
+            $sync.TgToken = $null
+        } else {
+            Status $TxtTelegram "✓  Pronto, $($sync.TgNome)! O Assessor já mandou uma mensagem para você e fica ligado sempre que o computador estiver ligado." "ok"
+            Concluir 4 "ok"; $BtnAvancar.IsEnabled = $true; $BtnPular.Visibility = "Collapsed"
         }
     }
 }
@@ -712,6 +717,9 @@ $BtnToken.Add_Click({ VerificarToken })
 # Colou no campo: confere sozinho, sem o diretor precisar clicar.
 $TxtToken.Add_TextChanged({
     $t = [regex]::Match($TxtToken.Text, '\d{5,15}:[\w-]{30,}').Value
+    # A mensagem do BotFather traz o link t.me/usuario_do_robo: guarda para o botao "Abrir".
+    $u = [regex]::Match($TxtToken.Text, 't\.me/(\w+bot)\b', 'IgnoreCase').Groups[1].Value
+    if ($u) { $script:botUser = $u }
     if ($t -and $t -ne $sync.TgToken -and -not $script:tarefa) { if ($TxtToken.Text -ne $t) { $TxtToken.Text = $t }; VerificarToken }
 })
 $TxtCodigo.Add_TextChanged({
@@ -750,6 +758,11 @@ $timer.Add_Tick({
     $pct = [int][Math]::Floor(($feitos + $fracao) / $passos.Count * 100)
     if ($BarraGeral.Value -ne $pct) { $BarraGeral.Value = $pct; $TxtPct.Text = "$pct%" }
 
+    if ($sync.TgPronto -and $script:pagina -eq 4 -and -not $script:tgAvisado) {
+        $script:tgAvisado = $true
+        Status $TxtTelegram "Agora abra o seu robô no Telegram e mande um oi. Ele responde com um código: não precisa fazer nada, o instalador aprova sozinho." ""
+        if ($sync.TgBot) { $BtnAbrirBot.IsEnabled = $true; $BtnAbrirBot.Content = "Abrir @$($sync.TgBot)" }
+    }
     if ($sync.ClaudeEsperando -and $script:pagina -eq 2 -and $CaixaCodigo.Visibility -ne "Visible") {
         $CaixaCodigo.Visibility = "Visible"; Status $TxtClaude "Aguardando o código do Claude..." ""; [void]$TxtCodigo.Focus()
     }
