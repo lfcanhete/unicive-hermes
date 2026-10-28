@@ -120,6 +120,21 @@ $Comum = {
 $TarefaInstalar = {
     Sub 0 "ativo"
     $hx = AcharHermes
+    if (-not $hx) {
+        # Python do uv registrado como instalado mas sem o python.exe (restos de uma instalacao apagada
+        # ou arquivo removido pelo antivirus): o uv nao baixa de novo e o instalador oficial falha.
+        $pyUv = Join-Path $env:APPDATA "uv\python"
+        if (Test-Path $pyUv) {
+            Get-ChildItem $pyUv -Directory -Filter "cpython-*" -ErrorAction SilentlyContinue |
+                Where-Object { -not (Test-Path (Join-Path $_.FullName "python.exe")) } |
+                ForEach-Object {
+                    Log "Removendo um Python incompleto: $($_.Name)"
+                    # Atalho (junction) do uv: apaga so o atalho, nunca o conteudo de outra pasta.
+                    if ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) { [IO.Directory]::Delete($_.FullName) }
+                    else { Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+                }
+        }
+    }
     for ($tentativa = 1; -not $hx -and $tentativa -le 2; $tentativa++) {
         Log "Baixando o instalador oficial do Hermes$(if ($tentativa -gt 1) { ' (segunda tentativa)' })..."
         [void](Executar "powershell.exe" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
