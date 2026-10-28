@@ -96,7 +96,8 @@ $Comum = {
 
     function B64Url([byte[]]$b) { [Convert]::ToBase64String($b).TrimEnd('=').Replace('+', '-').Replace('/', '_') }
 
-    function JsonUtf8($obj) { [Text.Encoding]::UTF8.GetBytes(($obj | ConvertTo-Json -Depth 5)) }
+    # A virgula impede o PowerShell de desmontar o byte[] em uma lista de numeros.
+    function JsonUtf8($obj) { return , [Text.Encoding]::UTF8.GetBytes(($obj | ConvertTo-Json -Depth 5)) }
 }
 
 $TarefaInstalar = {
@@ -566,6 +567,9 @@ function IrPara([int]$i) {
             if (-not $cfg.Google) {
                 $TxtGoogleIntro.Text = "Este instalador veio sem a configuração do Google. Peça à organização o instalador completo para conectar e-mail e agenda. Por enquanto a Pauta trabalha com o que você colar na conversa."
                 $CartaoGoogle.Visibility = "Collapsed"; $BtnGoogle.Visibility = "Collapsed"; $BtnPular.Visibility = "Collapsed"; $BtnAvancar.IsEnabled = $true
+            } elseif (-not $cfg.Demo -and (Test-Path (Join-Path $HermesHome "google_token.json"))) {
+                Status $TxtGoogle "✓  Este computador já está conectado ao Google. Pode continuar, ou entrar de novo com outra conta." "ok"
+                $BtnGoogle.Content = "Entrar de novo"; $BtnAvancar.IsEnabled = $true; $BtnPular.Visibility = "Collapsed"
             }
         }
         5 { MontarResumo }
@@ -617,7 +621,7 @@ $BtnAvancar.Add_Click({
         0 { Concluir 0 "ok"; IrPara 1 }
         1 { if ($script:erroInstala) { Marcar $passos[1] "ativo"; foreach ($s in $subs) { if ($s.Estado -eq "erro") { Marcar $s "pendente" } }; IniciarInstalacao } else { IrPara 2 } }
         2 { if (-not $script:feito[2]) { Concluir 2 "ok" }; IrPara 3 }
-        3 { if (-not $script:feito[3]) { Concluir 3 "pulado" }; IrPara 4 }
+        3 { if (-not $script:feito[3]) { Concluir 3 $(if (Test-Path (Join-Path $HermesHome "google_token.json")) { "ok" } else { "pulado" }) }; IrPara 4 }
         4 { IrPara 5 }
         5 { Concluir 5 "ok"; $win.Close() }
     }
