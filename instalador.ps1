@@ -119,8 +119,42 @@ $Comum = {
 
 $TarefaInstalar = {
     Sub 0 "ativo"
-    $hx = AcharHermes
-    if (-not $hx) {
+
+    # "Instalar do zero": fecha o Hermes, tira o gateway da inicializacao e os atalhos, e guarda a
+    # instalacao atual num backup (fica so o mais recente). Depois segue como uma instalacao nova.
+    if ($cfg.Limpo) {
+        Log "Removendo a instalação anterior..."
+        if ($cfg.Demo) { Start-Sleep 1 }
+        else {
+            $hxVelho = AcharHermes
+            if ($hxVelho) { [void](Executar $hxVelho @("gateway", "stop") -Quieto) }
+            function FecharHermes {
+                Get-Process -ErrorAction SilentlyContinue | Where-Object {
+                    try { $_.Path -and $_.Path.StartsWith($HermesHome, [StringComparison]::OrdinalIgnoreCase) } catch { $false }
+                } | Stop-Process -Force -ErrorAction SilentlyContinue
+            }
+            FecharHermes; Start-Sleep 2
+            Get-ChildItem ([Environment]::GetFolderPath("Startup")) -Filter "Hermes_Gateway*" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+            foreach ($dir in @([Environment]::GetFolderPath("Desktop"), [Environment]::GetFolderPath("Programs"))) {
+                Remove-Item (Join-Path $dir "Hermes.lnk") -Force -ErrorAction SilentlyContinue
+            }
+            if (Test-Path $HermesHome) {
+                $pai = Split-Path $HermesHome; $nomeHome = Split-Path $HermesHome -Leaf
+                Get-ChildItem $pai -Directory -Filter "$nomeHome.backup-*" -ErrorAction SilentlyContinue | ForEach-Object {
+                    Log "Apagando o backup antigo $($_.Name)..."; Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+                $backup = "$nomeHome.backup-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+                for ($i = 0; $i -lt 6 -and (Test-Path $HermesHome); $i++) {
+                    try { Rename-Item $HermesHome $backup -ErrorAction Stop } catch { FecharHermes; Start-Sleep 3 }
+                }
+                if (Test-Path $HermesHome) { throw "Não consegui remover a instalação anterior. Feche o Hermes (inclusive o ícone perto do relógio) e clique em Tentar de novo." }
+                Log "A instalação anterior foi guardada em $(Join-Path $pai $backup)"
+            }
+        }
+        # Se algo falhar daqui em diante, o "Tentar de novo" continua a instalacao sem apagar de novo.
+        $cfg.Limpo = $false
+    }
+
+    function LimparPythonQuebrado {
         # Python do uv registrado como instalado mas sem o python.exe (restos de uma instalacao apagada
         # ou arquivo removido pelo antivirus): o uv nao baixa de novo e o instalador oficial falha.
         $pyUv = Join-Path $env:APPDATA "uv\python"
@@ -135,26 +169,42 @@ $TarefaInstalar = {
                 }
         }
     }
-    for ($tentativa = 1; -not $hx -and $tentativa -le 2; $tentativa++) {
-        Log "Baixando o instalador oficial do Hermes$(if ($tentativa -gt 1) { ' (segunda tentativa)' })..."
-        [void](Executar "powershell.exe" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-            "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; iex (irm https://hermes-agent.nousresearch.com/install.ps1)"))
-        $saidaOficial = $script:saida
-        # O instalador oficial pode terminar partes em segundo plano: espera o Hermes aparecer por ate 1 minuto.
-        for ($i = 0; -not $hx -and $i -lt 12; $i++) {
-            $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
-            $hx = AcharHermes
-            if (-not $hx) { Start-Sleep 5 }
+    function InstalarOficial {
+        LimparPythonQuebrado
+        $hxNovo = $null
+        for ($tentativa = 1; -not $hxNovo -and $tentativa -le 2; $tentativa++) {
+            Log "Baixando o instalador oficial do Hermes$(if ($tentativa -gt 1) { ' (segunda tentativa)' })..."
+            [void](Executar "powershell.exe" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; iex (irm https://hermes-agent.nousresearch.com/install.ps1)"))
+            $saidaOficial = $script:saida
+            # O instalador oficial pode terminar partes em segundo plano: espera o Hermes aparecer por ate 1 minuto.
+            for ($i = 0; -not $hxNovo -and $i -lt 12; $i++) {
+                $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
+                $hxNovo = AcharHermes
+                if (-not $hxNovo) { Start-Sleep 5 }
+            }
         }
+        if (-not $hxNovo) {
+            $fim = (($saidaOficial -split "`r?`n") | Where-Object { $_.Trim() } | Select-Object -Last 6) -join " | "
+            throw "O Hermes não foi encontrado depois da instalação. Última mensagem do instalador oficial: $fim"
+        }
+        return $hxNovo
     }
-    if (-not $hx) {
-        $fim = (($saidaOficial -split "`r?`n") | Where-Object { $_.Trim() } | Select-Object -Last 6) -join " | "
-        throw "O Hermes não foi encontrado depois da instalação. Última mensagem do instalador oficial: $fim"
-    }
-    [void](Executar $hx @("--version"))
-    if ($script:saida -notmatch "Hermes Agent v") {
-        Log "Completando a instalação (reparo automático)..."
+    function HermesResponde([string]$exe) { ((Executar $exe @("--version") -Quieto) -eq 0) -and ($script:saida -match "Hermes Agent v") }
+
+    $hx = AcharHermes
+    if (-not $hx) { $hx = InstalarOficial }
+    if (HermesResponde $hx) { Log "Hermes: $((($script:saida -split "`r?`n") | Select-Object -First 1).Trim())" }
+    else {
+        Log "O Hermes não está respondendo. Fazendo o reparo automático..."
         [void](Executar $hx @("pm", "repair"))
+        if (-not (HermesResponde $hx)) {
+            Log "O reparo não resolveu. Reinstalando o Hermes..."
+            $hx = InstalarOficial
+            if (-not (HermesResponde $hx)) { [void](Executar $hx @("pm", "repair")) }
+            if (-not (HermesResponde $hx)) { throw "O Hermes foi instalado, mas não está respondendo. Escolha Instalar do zero." }
+        }
+        Log "Hermes consertado."
     }
     if (-not $cfg.Demo) {
         # Deixa o comando "hermes" disponivel em novas janelas do PowerShell.
@@ -176,6 +226,7 @@ $TarefaInstalar = {
         # Pode terminar com erro na etapa do launcher mesmo com o app pronto; o que vale e o Hermes.exe.
         [void](Executar "powershell.exe" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $instLocal, "-Stage", "products", "-IncludeDesktop"))
     }
+    elseif (Test-Path $cfg.AppExe) { Log "Aplicativo Hermes: já estava instalado." }
     # Uma etapa do app que termina com erro deixa esta trava, e o app fica esperando uma atualizacao que nao existe.
     if (-not $cfg.Demo -and (Test-Path $trava)) { Remove-Item $trava -Force -ErrorAction SilentlyContinue }
     if (-not $cfg.Demo -and (Test-Path $cfg.AppExe) -and -not (Test-Path $cfg.Atalho)) {
@@ -369,6 +420,23 @@ $TarefaGoogle = {
     } catch { Log "Não consegui ler o endereço do Gmail: $($_.Exception.Message)" }
 }
 
+# Telegram ja configurado? Token no .env e dono aprovado; se o gateway estiver desligado, religa.
+$TarefaTelegramVerificar = {
+    $hx = AcharHermes
+    $envf = Join-Path $HermesHome ".env"
+    if (-not ((Test-Path $envf) -and (Select-String -Path $envf -Pattern '^TELEGRAM_BOT_TOKEN=\S' -Quiet))) { return }
+    [void](Executar $hx @("pairing", "list") -Quieto)
+    $aprovado = ($script:saida -match '(?ms)Approved Users.*?^\s*telegram\s+\S+') -or (Select-String -Path $envf -Pattern '^TELEGRAM_ALLOWED_USERS=\S' -Quiet)
+    if (-not $aprovado) { return }
+    [void](Executar $hx @("gateway", "status") -Quieto)
+    if ($script:saida -match '(?i)not running') {
+        Log "O Assessor estava desligado no Telegram. Ligando..."
+        [void](Executar $hx @("gateway", "install", "--if-missing", "--start-now", "--start-on-login"))
+        [void](Executar $hx @("gateway", "restart"))
+    } else { Log "Telegram: o Assessor está ligado." }
+    $sync.TgJa = $true
+}
+
 # O PowerShell nunca fala com o Telegram: script mandando dados para um robo do Telegram e o padrao
 # que o antivirus procura (e mata). Quem conversa com o Telegram e o proprio Hermes; o instalador so
 # grava o token, liga o gateway e aprova o pareamento do dono pelo comando do Hermes.
@@ -470,6 +538,22 @@ $TarefaTelegram = {
       <Setter Property="Padding" Value="16,12"/>
       <Setter Property="Margin" Value="0,10,0,0"/>
     </Style>
+    <Style x:Key="Opcao" TargetType="Button">
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="b" Background="White" BorderBrush="#D8EDE3" BorderThickness="2" CornerRadius="12" Padding="16,12">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="#FFC571"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="Campo" TargetType="TextBox">
       <Setter Property="Padding" Value="8,7"/>
       <Setter Property="FontFamily" Value="Consolas"/>
@@ -511,13 +595,20 @@ $TarefaTelegram = {
           <Grid>
             <StackPanel x:Name="P0">
               <TextBlock TextWrapping="Wrap" FontSize="15" Text="Este instalador deixa o Assessor pronto para usar: instala o Hermes, conecta o Claude, o Google e o Telegram. No final, é só abrir e conversar."/>
-              <TextBlock Margin="0,20,0,6" FontWeight="SemiBold" Text="Tenha por perto:"/>
-              <TextBlock Margin="0,3" Text="•   a sua conta do Claude"/>
-              <TextBlock Margin="0,3" Text="•   a sua conta @unicive.edu.br"/>
-              <TextBlock Margin="0,3" Text="•   o Telegram instalado no celular ou no computador"/>
-              <Border Background="#FFF1DA" CornerRadius="10" Padding="14,10" Margin="0,22,0,0">
-                <TextBlock TextWrapping="Wrap" Text="Leva uns 10 minutos. Não feche esta janela até o final. Se algo der errado, ela mesma explica o que fazer."/>
-              </Border>
+              <TextBlock Margin="0,18,0,0" FontWeight="SemiBold" Text="O que você quer fazer?"/>
+              <Button x:Name="BtnAjustar" Style="{StaticResource Opcao}" Margin="0,10,0,0">
+                <StackPanel>
+                  <TextBlock FontWeight="SemiBold" FontSize="15" Foreground="#006652" Text="Verificar e ajustar  (recomendado)"/>
+                  <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" Foreground="#4A6B60" Text="Confere cada parte (Hermes, aplicativo, Claude Code, Claude, Google e Telegram) e instala ou conserta só o que faltar. Serve também para a primeira instalação."/>
+                </StackPanel>
+              </Button>
+              <Button x:Name="BtnLimpo" Style="{StaticResource Opcao}" Margin="0,10,0,0">
+                <StackPanel>
+                  <TextBlock FontWeight="SemiBold" FontSize="15" Foreground="#006652" Text="Instalar do zero"/>
+                  <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" Foreground="#4A6B60" Text="Guarda a instalação atual num backup e instala tudo de novo, com logins novos. Use se o Assessor continuar com problema depois do ajuste."/>
+                </StackPanel>
+              </Button>
+              <TextBlock TextWrapping="Wrap" Margin="0,16,0,0" Text="Tenha por perto a sua conta do Claude, a sua conta @unicive.edu.br e o Telegram. Leva uns 10 minutos; não feche esta janela até o final."/>
             </StackPanel>
             <StackPanel x:Name="P1" Visibility="Collapsed">
               <TextBlock TextWrapping="Wrap" FontSize="15" Text="Agora é com o instalador: ele baixa e configura tudo sozinho. Pode levar alguns minutos, e você não precisa fazer nada."/>
@@ -689,10 +780,14 @@ function IrPara([int]$i) {
     Marcar $passos[$i] "ativo"
     $TxtPasso.Text = "PASSO $($i + 1) DE $($passos.Count)"
     $TxtTitulo.Text = $titulos[$i]
+    if ($i -eq 1 -and $script:modo -eq "ajustar") { $TxtTitulo.Text = "Verificando e ajustando" }
+    if ($i -eq 1 -and $script:modo -eq "limpo") { $TxtTitulo.Text = "Instalando do zero" }
     $TxtStatus.Text = $statusPadrao[$i]
     $BtnPular.Visibility = $(if ($i -eq 3 -or $i -eq 4) { "Visible" } else { "Collapsed" })
-    $BtnAvancar.Content = $(if ($i -eq 0) { "Começar" } elseif ($i -eq 5) { "Concluir" } else { "Continuar" })
-    $BtnAvancar.IsEnabled = ($i -eq 0 -or $i -eq 5)
+    # Na tela inicial quem decide sao os dois cartoes (ajustar / do zero).
+    $BtnAvancar.Visibility = $(if ($i -eq 0) { "Collapsed" } else { "Visible" })
+    $BtnAvancar.Content = $(if ($i -eq 5) { "Concluir" } else { "Continuar" })
+    $BtnAvancar.IsEnabled = ($i -eq 5)
     switch ($i) {
         1 { IniciarInstalacao }
         2 {
@@ -703,6 +798,8 @@ function IrPara([int]$i) {
                     if ($sync.ClaudeJa -and $script:pagina -eq 2 -and -not $script:feito[2]) {
                         Status $TxtClaude "✓  Este computador já está conectado ao Claude. Pode continuar, ou entrar de novo com outra conta." "ok"
                         $BtnClaude.Content = "Entrar de novo"; $BtnAvancar.IsEnabled = $true
+                        # No ajuste, o que ja esta certo passa sozinho.
+                        if ($script:modo -eq "ajustar") { Registrar "[ajuste] Claude já conectado"; Concluir 2 "ok"; IrPara 3 }
                     }
                 }
             }
@@ -711,9 +808,27 @@ function IrPara([int]$i) {
             if (-not $cfg.Google) {
                 $TxtGoogleIntro.Text = "Este instalador veio sem a configuração do Google. Peça à organização o instalador completo para conectar e-mail e agenda. Por enquanto o Assessor trabalha com o que você colar na conversa."
                 $CartaoGoogle.Visibility = "Collapsed"; $BtnGoogle.Visibility = "Collapsed"; $BtnPular.Visibility = "Collapsed"; $BtnAvancar.IsEnabled = $true
+                if ($script:modo -eq "ajustar") { Concluir 3 "pulado"; IrPara 4; return }
             } elseif (-not $cfg.Demo -and (Test-Path (Join-Path $HermesHome "google_token.json"))) {
                 Status $TxtGoogle "✓  Este computador já está conectado ao Google. Pode continuar, ou entrar de novo com outra conta." "ok"
                 $BtnGoogle.Content = "Entrar de novo"; $BtnAvancar.IsEnabled = $true; $BtnPular.Visibility = "Collapsed"
+                if ($script:modo -eq "ajustar") { Registrar "[ajuste] Google já conectado"; Concluir 3 "ok"; IrPara 4; return }
+            }
+        }
+        4 {
+            # Telegram ja configurado (token + dono aprovado): confere se o gateway esta ligado e liga se nao estiver.
+            if (-not $cfg.Demo -and -not $script:tarefa -and $script:feito[4] -ne "ok") {
+                $sync.TgJa = $false
+                Rodar $TarefaTelegramVerificar {
+                    if ($sync.TgJa -and $script:pagina -eq 4) {
+                        Status $TxtTelegram "✓  Este computador já está conectado ao Telegram e o Assessor está ligado. Para trocar de robô, cole um token novo no passo 2." "ok"
+                        Concluir 4 "ok"; $BtnAvancar.IsEnabled = $true; $BtnPular.Visibility = "Collapsed"
+                        if ($script:modo -eq "ajustar") { Registrar "[ajuste] Telegram já conectado"; IrPara 5 }
+                    } elseif ($script:pagina -eq 4 -and $TxtToken.Text -match '\d{5,15}:[\w-]{30,}') {
+                        # Colou o token enquanto a verificacao rodava: segue com ele.
+                        VerificarToken
+                    }
+                }
             }
         }
         5 { MontarResumo }
@@ -750,13 +865,15 @@ function MontarResumo {
         @("Hermes e Assessor instalados", "ok"),
         @("Claude conectado (Sonnet 5.5)", $script:feito[2]),
         @($(if ($sync.GoogleEmail) { "Google conectado: $($sync.GoogleEmail)" } elseif ($script:feito[3] -eq "ok") { "Google conectado" } else { "Google: fica para depois" }), $script:feito[3]),
-        @($(if ($sync.TgBot -and $script:feito[4] -eq "ok") { "Telegram conectado: @$($sync.TgBot)" } else { "Telegram: fica para depois" }), $script:feito[4])
+        @($(if ($script:feito[4] -ne "ok") { "Telegram: fica para depois" } elseif ($sync.TgBot) { "Telegram conectado: @$($sync.TgBot)" } else { "Telegram conectado" }), $script:feito[4])
     )
     foreach ($l in $linhas) {
         $estado = $(if ($l[1] -eq "ok") { "ok" } else { "pulado" })
         $it = NovoItem $l[0] "•" $false; Marcar $it $estado; [void]$ListaResumo.Children.Add($it.Painel)
     }
-    $TxtFinal.Text = $(if ($script:feito[4] -eq "ok") { "No celular, procure @$($sync.TgBot) no Telegram: o Assessor já mandou uma mensagem para você." } else { "Nas próximas vezes, abra pelo atalho Hermes na área de trabalho." })
+    $TxtFinal.Text = $(if ($script:feito[4] -eq "ok" -and $sync.TgBot) { "No celular, procure @$($sync.TgBot) no Telegram: o Assessor já mandou uma mensagem para você." }
+        elseif ($script:feito[4] -eq "ok") { "Fale com o Assessor pelo seu robô no Telegram ou pelo atalho Hermes na área de trabalho." }
+        else { "Nas próximas vezes, abra pelo atalho Hermes na área de trabalho." })
 }
 
 # ---------- Botoes ----------
@@ -769,6 +886,21 @@ $BtnAvancar.Add_Click({
         4 { IrPara 5 }
         5 { Concluir 5 "ok"; $win.Close() }
     }
+})
+$BtnAjustar.Add_Click({
+    if ($script:pagina -ne 0 -or $script:tarefa) { return }
+    $script:modo = "ajustar"; $cfg.Limpo = $false
+    Registrar "[modo] verificar e ajustar"
+    Concluir 0 "ok"; IrPara 1
+})
+$BtnLimpo.Add_Click({
+    if ($script:pagina -ne 0 -or $script:tarefa) { return }
+    # Com a janela como dona, a pergunta trava a janela ate ser respondida.
+    $r = [Windows.MessageBox]::Show($win, "Instalar do zero fecha o Hermes, guarda a instalação atual num backup e instala tudo de novo.`n`nVocê vai precisar entrar de novo no Claude, no Google e no Telegram, e o Assessor começa sem as conversas e preferências anteriores.`n`nContinuar?", "Instalar do zero", "YesNo", "Warning")
+    if ($r -ne "Yes" -or $script:pagina -ne 0) { return }
+    $script:modo = "limpo"; $cfg.Limpo = $true
+    Registrar "[modo] instalar do zero"
+    Concluir 0 "ok"; IrPara 1
 })
 $BtnPular.Add_Click({
     if ($script:tarefa) { $sync.Cancelar = $true }
@@ -864,7 +996,7 @@ $timer.Add_Tick({
     $feitos = @($passos | Where-Object { $_.Estado -eq "ok" -or $_.Estado -eq "pulado" }).Count
     $fracao = 0
     if ($passos[1].Estado -eq "ativo" -or $passos[1].Estado -eq "erro") { $fracao = @($subs | Where-Object { $_.Estado -eq "ok" -or $_.Estado -eq "pulado" }).Count / $subs.Count }
-    $pct = [int][Math]::Floor(($feitos + $fracao) / $passos.Count * 100)
+    $pct = $(if ($script:pagina -eq 5) { 100 } else { [int][Math]::Floor(($feitos + $fracao) / $passos.Count * 100) })
     if ($BarraGeral.Value -ne $pct) { $BarraGeral.Value = $pct; $TxtPct.Text = "$pct%" }
 
     if ($sync.TgPronto -and $script:pagina -eq 4 -and -not $script:tgAvisado) {
@@ -901,7 +1033,7 @@ $win.Dispatcher.Add_UnhandledException({
     param($origem, $e)
     $e.Handled = $true
     Registrar ("ERRO INESPERADO: " + $e.Exception.ToString())
-    [void][Windows.MessageBox]::Show("Algo inesperado aconteceu, mas a instalação continua aberta.`n`nSe algo não funcionar, envie para o suporte o arquivo:`n$LogArq", "Instalar o Assessor")
+    [void][Windows.MessageBox]::Show($win, "Algo inesperado aconteceu, mas a instalação continua aberta.`n`nSe algo não funcionar, envie para o suporte o arquivo:`n$LogArq", "Instalar o Assessor")
 })
 
 if ($cfg.Demo) { $win.Title += "  [demonstração]" }
