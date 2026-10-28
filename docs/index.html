@@ -367,12 +367,13 @@ footer .serif{color:var(--papel);font-size:1.3rem;margin-bottom:.3rem}
 <section id="instalar" class="claro-2">
   <div class="wrap reveal">
     <p class="eyebrow">Passo a passo</p>
-    <h2>Instalando o Assessor</h2>
-    <p class="lead">Um arquivo só. Ele instala o Hermes oficial (se faltar) e abre um assistente que guia você em 6 telas. O que já estiver certo passa sozinho.</p>
+    <h2>Instalando e configurando o Assessor</h2>
+    <p class="lead">Duas partes: primeiro o Hermes, instalado do jeito original pelo site oficial; depois o configurador do Assessor, um assistente que guia você em 6 telas. O que já estiver certo passa sozinho.</p>
 
     <div class="baixar">
-      <a class="btn btn-ouro btn-grande" href="Instalar-Assessor.cmd" download>⬇ Baixar o instalador</a>
-      <div class="info"><b>Windows 10 ou 11 · uns 10 minutos.</b><br>Não precisa ser administrador. Pode rodar de novo quantas vezes quiser: ele só ajusta o que faltar.</div>
+      <a class="btn btn-ouro btn-grande" href="https://hermes-assets.nousresearch.com/Hermes-Setup.exe">1 · Instalar o Hermes oficial</a>
+      <a class="btn btn-ouro btn-grande" href="Configurar-Assessor.cmd" download>2 · Baixar o configurador</a>
+      <div class="info"><b>Windows 10 ou 11 · uns 15 minutos.</b><br>O Hermes é instalado do jeito original, pelo instalador da Nous Research. O configurador só prepara o Assessor nele, e pode ser aberto de novo quantas vezes quiser.</div>
     </div>
 
     <div class="antes">
@@ -385,23 +386,10 @@ footer .serif{color:var(--papel);font-size:1.3rem;margin-bottom:.3rem}
       <div class="passo">
         <div>
           <span class="num">1</span>
-          <h3>Abra o arquivo baixado</h3>
-          <p>Clique no arquivo <b>Instalar-Assessor.cmd</b> na barra de downloads (ou na pasta Downloads).</p>
-          <div class="alerta"><b>O Windows pode perguntar se você confia no arquivo.</b> É normal com arquivos feitos pela própria equipe:<ol><li>Navegador: “pode ser perigoso” → clique em <b>Manter</b>.</li><li>Windows: “O Windows protegeu o computador” → <b>Mais informações</b> → <b>Executar assim mesmo</b>.</li><li>“O SmartScreen não pode ser acessado” → <b>Executar</b>.</li></ol></div>
-        </div>
-        <div class="janela" aria-hidden="true">
-          <div class="barra-tit"><span>Instalador do Assessor - UNICIVE</span><span>— ☐ ✕</span></div>
-          <div style="background:#0c0c0c;color:#ddd;font-family:'JetBrains Mono',monospace;font-size:.62rem;padding:.8rem;min-height:150px;line-height:1.7">
-            Instalador do Assessor - UNICIVE<br><br>[1/2] Instalando o Hermes oficial (Nous Research).<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Uma janela de instalação vai abrir: siga até o fim.<br>[2/2] Abrindo o assistente do Assessor...</div>
-        </div>
-      </div>
-
-      <div class="passo">
-        <div>
-          <span class="num">2</span>
-          <h3>Hermes oficial (só na primeira vez)</h3>
-          <p>Se o Hermes ainda não estiver no computador, abre o instalador oficial da Nous Research. Siga até o fim. Ele pode levar alguns minutos e abrir o aplicativo Hermes no final: <b>pode fechar o aplicativo</b>, o assistente do Assessor abre em seguida.</p>
-          <p>Se o Hermes já estiver instalado, este passo é pulado.</p>
+          <h3>Instale o Hermes oficial</h3>
+          <p>Clique em <b>1 · Instalar o Hermes oficial</b> e abra o arquivo <b>Hermes-Setup.exe</b>. É o instalador original da Nous Research, assinado digitalmente. Siga até o fim: pode levar alguns minutos.</p>
+          <p>No final ele abre o aplicativo <b>Hermes</b>. Espere ele terminar de preparar tudo e depois pode fechar.</p>
+          <p>Prefere pela página oficial? <a href="https://hermes-agent.nousresearch.com/desktop" target="_blank" rel="noopener"><b>hermes-agent.nousresearch.com/desktop</b></a>.</p>
         </div>
         <div class="janela" aria-hidden="true">
           <div class="barra-tit"><span>Hermes Setup</span><span>✕</span></div>
@@ -413,19 +401,16 @@ footer .serif{color:var(--papel);font-size:1.3rem;margin-bottom:.3rem}
 
       <div class="passo">
         <div>
-          <span class="num">3</span>
-          <h3>Verificação (sozinha)</h3>
-          <p>O assistente abre e você clica em <b>Começar</b>. Ele confere cada parte e conserta o que faltar:</p>
-          <ol><li>Hermes e aplicativo</li><li>Claude Sonnet 5.5 e a personalidade do Assessor</li><li>Claude Code (para acessar os modelos mais novos)</li><li>Conexão com o Google</li></ol>
-          <p>Cada item ganha um ✓. Você não precisa fazer nada.</p>
+          <span class="num">2</span>
+          <h3>Abra o configurador do Assessor</h3>
+          <p>Clique em <b>2 · Baixar o configurador</b> e abra o arquivo <b>Configurar-Assessor.cmd</b>. Ele não instala nem apaga nada do Hermes: só abre o assistente que configura o Assessor.</p>
+          <div class="alerta"><b>O Windows pode perguntar se você confia no arquivo.</b> É normal com arquivos feitos pela própria equipe:<ol><li>Navegador: “pode ser perigoso” → clique em <b>Manter</b>.</li><li>Windows: “O Windows protegeu o computador” → <b>Mais informações</b> → <b>Executar assim mesmo</b>.</li><li>“O SmartScreen não pode ser acessado” → <b>Executar</b>.</li></ol></div>
+          <p>Se o Hermes ainda não estiver pronto, o configurador avisa e abre a página oficial para instalar.</p>
         </div>
         <div class="janela" aria-hidden="true">
-          <div class="barra-tit"><span>Instalar o Assessor · UNICIVE</span><span>— ✕</span></div>
-          <div class="corpo">
-            <div class="lado"><div class="marca">Assessor</div><div class="item ok"><span class="bol">✓</span>Boas-vindas</div><div class="item at"><span class="bol">2</span>Verificação</div><div class="item"><span class="bol">3</span>Claude</div><div class="item"><span class="bol">4</span>Google</div><div class="item"><span class="bol">5</span>Telegram</div><div class="item"><span class="bol">6</span>Pronto</div></div>
-            <div class="cont"><div class="p">PASSO 2 DE 6</div><div class="t">Verificando e ajustando</div><div class="sub"><i>✓</i>Hermes</div><div class="sub"><i>✓</i>Aplicativo Hermes</div><div class="sub"><i>✓</i>Claude Sonnet 5.5 e o Assessor</div><div class="sub"><i>✓</i>Claude Code</div><div class="sub"><i style="background:var(--ouro)">5</i>Conexão com o Google</div></div>
-          </div>
-          <div class="rod"><span>Instalando os componentes do Google...</span><span>29%</span></div>
+          <div class="barra-tit"><span>Configurar o Assessor - UNICIVE</span><span>— ☐ ✕</span></div>
+          <div style="background:#0c0c0c;color:#ddd;font-family:'JetBrains Mono',monospace;font-size:.62rem;padding:.8rem;min-height:150px;line-height:1.7">
+            Configurar o Assessor - UNICIVE<br><br>Abrindo o assistente do Assessor...</div>
         </div>
       </div>
 
@@ -437,7 +422,7 @@ footer .serif{color:var(--papel);font-size:1.3rem;margin-bottom:.3rem}
           <p>Se o computador já estiver conectado, o passo passa sozinho.</p>
         </div>
         <div class="janela" aria-hidden="true">
-          <div class="barra-tit"><span>Instalar o Assessor · UNICIVE</span><span>— ✕</span></div>
+          <div class="barra-tit"><span>Configurar o Assessor · UNICIVE</span><span>— ✕</span></div>
           <div class="corpo">
             <div class="lado"><div class="marca">Assessor</div><div class="item ok"><span class="bol">✓</span>Boas-vindas</div><div class="item ok"><span class="bol">✓</span>Verificação</div><div class="item at"><span class="bol">3</span>Claude</div><div class="item"><span class="bol">4</span>Google</div><div class="item"><span class="bol">5</span>Telegram</div><div class="item"><span class="bol">6</span>Pronto</div></div>
             <div class="cont"><div class="p">PASSO 3 DE 6</div><div class="t">Conecte o Claude</div><div class="mini">1. Entrar com o Claude · 2. Authorize · 3. Copy e Ctrl+V</div><span class="bt">Abrir o navegador de novo</span><div style="margin-top:.4rem">Cole o código aqui (Ctrl+V):</div><div class="campo">x7Kp…3fQ#a9Lm…T2</div><div class="ok">Código recebido. Conferindo...</div></div>
@@ -457,7 +442,7 @@ footer .serif{color:var(--papel);font-size:1.3rem;margin-bottom:.3rem}
           <div class="barra-tit"><span>accounts.google.com</span><span>✕</span></div>
           <div style="background:#004A3B;color:#fff;min-height:190px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:1rem">
             <div style="font-family:'Fraunces',serif;color:var(--ouro);font-size:1.15rem">Assessor · UNICIVE</div>
-            <div style="font-size:.75rem;margin-top:.4rem;max-width:80%">Pronto! O Google foi conectado. Pode fechar esta aba e voltar ao instalador.</div></div>
+            <div style="font-size:.75rem;margin-top:.4rem;max-width:80%">Pronto! O Google foi conectado. Pode fechar esta aba e voltar ao configurador.</div></div>
         </div>
       </div>
 
@@ -486,7 +471,7 @@ footer .serif{color:var(--papel);font-size:1.3rem;margin-bottom:.3rem}
           <p>Na primeira conversa ele se apresenta e pergunta como você prefere ser chamado, o tom e o nível de detalhe. Responda com calma: é isso que ele vai lembrar.</p>
         </div>
         <div class="janela" aria-hidden="true">
-          <div class="barra-tit"><span>Instalar o Assessor · UNICIVE</span><span>— ✕</span></div>
+          <div class="barra-tit"><span>Configurar o Assessor · UNICIVE</span><span>— ✕</span></div>
           <div class="corpo">
             <div class="lado"><div class="marca">Assessor</div><div class="item ok"><span class="bol">✓</span>Boas-vindas</div><div class="item ok"><span class="bol">✓</span>Verificação</div><div class="item ok"><span class="bol">✓</span>Claude</div><div class="item ok"><span class="bol">✓</span>Google</div><div class="item ok"><span class="bol">✓</span>Telegram</div><div class="item at"><span class="bol">6</span>Pronto</div></div>
             <div class="cont"><div class="p">PASSO 6 DE 6</div><div class="t">Tudo pronto!</div><div class="sub"><i>✓</i>Hermes e Assessor prontos</div><div class="sub"><i>✓</i>Claude conectado (Sonnet 5.5)</div><div class="sub"><i>✓</i>Google conectado</div><div class="sub"><i>✓</i>Telegram conectado</div><span class="bt">Abrir o Assessor</span></div>
@@ -506,16 +491,16 @@ footer .serif{color:var(--papel);font-size:1.3rem;margin-bottom:.3rem}
     <p class="lead">Tudo o que o assistente faz fica registrado em <span class="mono">%TEMP%\assistente-assessor.log</span>. Se precisar de ajuda, mande esse arquivo para o Luiz Fernando.</p>
     <div style="margin-top:1.8rem">
       <details class="faq"><summary>O Windows bloqueou o arquivo ou ele não abre</summary><div class="corpo">
-        <ol><li>Reinicie o computador e tente de novo (resolve na maioria das vezes).</li><li>Se continuar, instale pelo PowerShell: abra o <b>Windows PowerShell</b> pelo menu Iniciar, cole o comando abaixo e aperte Enter. É o mesmo instalador, só que sem passar pelo navegador.</li></ol>
-        <div class="comando"><code id="cmd-ps">[Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://lfcanhete.github.io/unicive-hermes/Instalar-Assessor.cmd -OutFile $env:TEMP\Instalar-Assessor.cmd; &amp; $env:TEMP\Instalar-Assessor.cmd</code><button class="btn btn-ouro" data-copia="cmd-ps">Copiar</button><span class="copiar-ok">Copiado ✓</span></div>
+        <ol><li>Reinicie o computador e tente de novo (resolve na maioria das vezes).</li><li>Se continuar, instale pelo PowerShell: abra o <b>Windows PowerShell</b> pelo menu Iniciar, cole o comando abaixo e aperte Enter. É o mesmo configurador, só que sem passar pelo navegador.</li></ol>
+        <div class="comando"><code id="cmd-ps">[Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://lfcanhete.github.io/unicive-hermes/Configurar-Assessor.cmd -OutFile $env:TEMP\Configurar-Assessor.cmd; &amp; $env:TEMP\Configurar-Assessor.cmd</code><button class="btn btn-ouro" data-copia="cmd-ps">Copiar</button><span class="copiar-ok">Copiado ✓</span></div>
       </div></details>
-      <details class="faq"><summary>Apareceu “O Windows não deixou salvar o assistente” ou “acesso negado”</summary><div class="corpo">É o antivírus segurando o arquivo. Feche todas as janelas do instalador, espere um minuto e abra o Instalar-Assessor de novo: cada execução usa um arquivo novo.</div></details>
-      <details class="faq"><summary>O instalador oficial do Hermes mostrou “Install didn’t finish”</summary><div class="corpo">Normalmente aparece com “acesso ao caminho … config.yaml foi negado”: um Hermes antigo ainda está aberto ou o antivírus está segurando a pasta.<ol><li>Feche o Hermes, inclusive o ícone perto do relógio, e clique em <b>Retry install</b>.</li><li>Se aparecer de novo, feche a janela e rode o <a href="Remover-Hermes.cmd" download><b>Remover-Hermes.cmd</b></a>. Ele fecha o que estiver aberto e guarda a instalação antiga num backup.</li><li>Abra o <b>Instalar-Assessor</b> de novo.</li></ol></div></details>
-      <details class="faq"><summary>A verificação parou com erro no Hermes</summary><div class="corpo">Clique em <b>Tentar de novo</b>. Se o erro continuar, comece do zero: baixe o <a href="Remover-Hermes.cmd" download><b>Remover-Hermes.cmd</b></a> e abra. Ele fecha o Hermes, tira da inicialização do Windows, limpa o que estiver quebrado e guarda a instalação num backup. Depois abra o Instalar-Assessor de novo (os logins terão de ser feitos outra vez).</div></details>
+      <details class="faq"><summary>Apareceu “O Windows não deixou salvar o assistente” ou “acesso negado”</summary><div class="corpo">É o antivírus segurando o arquivo. Feche todas as janelas do configurador, espere um minuto e abra o Configurar-Assessor de novo: cada execução usa um arquivo novo.</div></details>
+      <details class="faq"><summary>O instalador oficial do Hermes mostrou “Install didn’t finish”</summary><div class="corpo">É uma mensagem do instalador da Nous Research, normalmente porque um Hermes antigo ainda está aberto ou o antivírus segurou um arquivo.<ol><li>Feche o Hermes (inclusive o ícone perto do relógio) e clique em <b>Retry install</b>.</li><li>Se continuar, reinicie o computador e rode o <b>Hermes-Setup.exe</b> de novo.</li><li>Persistiu? Rode o <a href="Remover-Hermes.cmd" download><b>Remover-Hermes.cmd</b></a> (limpeza completa), reinicie e instale o Hermes de novo pelo site oficial.</li></ol></div></details>
+      <details class="faq"><summary>O configurador diz que o Hermes não está instalado ou não responde</summary><div class="corpo">Abra o aplicativo <b>Hermes</b> uma vez e espere ele terminar de preparar; depois abra o Configurar-Assessor de novo. Se o Hermes não abrir, reinstale pelo site oficial. Para começar do zero, rode antes o <a href="Remover-Hermes.cmd" download><b>Remover-Hermes.cmd</b></a>.</div></details>
       <details class="faq"><summary>O login do Claude não funcionou</summary><div class="corpo">Confira se entrou com a conta certa e se copiou o código inteiro (ele tem um <b>#</b> no meio). Clique em <b>Entrar com o Claude</b> para recomeçar.</div></details>
       <details class="faq"><summary>O Google mostrou “acesso bloqueado” ou “org_internal”</summary><div class="corpo">Você entrou com uma conta que não é @unicive.edu.br. Clique em <b>Abrir o navegador de novo</b>, troque de conta e permita o acesso.</div></details>
       <details class="faq"><summary>O Assessor demora para responder</summary><div class="corpo">A primeira mensagem de cada conversa leva uns 30 segundos para preparar tudo. Se um pedido ficar minutos parado, é o limite de uso do seu plano do Claude: espere um pouco ou mande <span class="mono">/new</span> para começar uma conversa nova.</div></details>
-      <details class="faq"><summary>O aplicativo pede para esperar uma atualização</summary><div class="corpo">Feche o Hermes, espere um minuto e abra de novo. Se continuar, rode o Instalar-Assessor: ele remove a trava que causa isso.</div></details>
+      <details class="faq"><summary>O aplicativo pede para esperar uma atualização</summary><div class="corpo">Feche o Hermes, espere um minuto e abra de novo. Se continuar, abra o Configurar-Assessor: ele remove a trava que causa isso.</div></details>
     </div>
     <p class="eyebrow" style="margin-top:2.4rem">Links oficiais do Hermes</p>
     <div class="links-oficiais">

@@ -1,5 +1,5 @@
 # UNICIVE - Assistente do Assessor (Hermes Agent + Claude + Google + Telegram)
-# Roda no Python que o proprio Hermes instala (aberto pelo Instalar-Assessor.cmd). Confere e ajusta
+# Roda no Python que o proprio Hermes instala (aberto pelo Configurar-Assessor.cmd). Confere e ajusta
 # cada parte e faz os logins de forma guiada. Sem PowerShell: o antivirus da instituicao barrava.
 import base64
 import hashlib
@@ -178,15 +178,14 @@ def deixar_claude_visivel(exe):
 def tarefa_verificar(sub):
     sub(0, "ativo")
     hx = achar_hermes()
+    # O configurador nao instala nem conserta o Hermes: ele e instalado do jeito original, pelo site oficial.
     if not hx:
-        raise Falha("O Hermes não está instalado. Feche esta janela e abra o Instalar-Assessor de novo.")
+        raise Falha("O Hermes não está instalado. Instale pelo site oficial (hermes-agent.nousresearch.com), abra o "
+                    "Hermes uma vez e depois abra o Configurar-Assessor de novo.")
     rc, out = executar([hx, "--version"], quieto=True)
     if rc != 0 or "Hermes Agent v" not in out:
-        log("O Hermes não está respondendo. Fazendo o reparo automático...")
-        executar([hx, "pm", "repair"])
-        rc, out = executar([hx, "--version"], quieto=True)
-        if rc != 0 or "Hermes Agent v" not in out:
-            raise Falha("O Hermes está instalado, mas não responde. Abra o Instalar-Assessor de novo para reinstalar.")
+        raise Falha("O Hermes está instalado, mas não responde. Abra o aplicativo Hermes uma vez e tente de novo; se "
+                    "continuar, reinstale o Hermes pelo site oficial.")
     log("Hermes: " + out.splitlines()[0].strip())
     sub(0, "ok")
 
@@ -345,8 +344,8 @@ def tarefa_google():
                 self.end_headers()
                 return
             ok = "code" in q and q.get("state", [""])[0] == estado_oauth
-            msg = ("Pronto! O Google foi conectado. Pode fechar esta aba e voltar ao instalador." if ok
-                   else "Não deu certo. Volte ao instalador e tente de novo.")
+            msg = ("Pronto! O Google foi conectado. Pode fechar esta aba e voltar ao configurador." if ok
+                   else "Não deu certo. Volte ao configurador e tente de novo.")
             html = (f"<!doctype html><meta charset=utf-8><title>Assessor</title><body style=\"font-family:Segoe UI,sans-serif;"
                     f"background:#004A3B;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0\">"
                     f"<div style=\"text-align:center;max-width:520px;padding:24px\"><h1 style=\"color:#FFC571;font-weight:600\">"
@@ -737,7 +736,7 @@ def texto(pai, conteudo, **kw):
 class Janela:
     def __init__(self, raiz):
         self.raiz, self.pagina, self.tarefa, self.feito = raiz, 0, None, {}
-        raiz.title("Instalar o Assessor · UNICIVE")
+        raiz.title("Configurar o Assessor · UNICIVE")
         raiz.geometry("940x720")
         raiz.resizable(False, False)
         raiz.configure(bg=PAPEL)
@@ -801,7 +800,7 @@ class Janela:
     # ----- paginas -----
     def montar_paginas(self):
         p = self.paginas[0]
-        texto(p, "Este instalador deixa o Assessor pronto para usar: confere o Hermes, ajusta o que faltar e conecta o "
+        texto(p, "Este configurador deixa o Assessor pronto no seu Hermes: confere a instalação, ajusta o que faltar e conecta o "
                  "Claude, o Google e o Telegram. O que já estiver certo passa sozinho.", font=("Segoe UI", 12))
         tk.Frame(p, bg=PAPEL, height=14).pack()
         texto(p, "Tenha por perto:", font=("Segoe UI", 11, "bold"))
@@ -812,7 +811,7 @@ class Janela:
         texto(aviso, "Leva uns 10 minutos. Não feche esta janela até o final. Se algo der errado, ela mesma explica o que fazer.")
 
         p = self.paginas[1]
-        texto(p, "Agora é com o instalador: ele confere cada parte e conserta o que faltar. Você não precisa fazer nada.",
+        texto(p, "Agora é com o configurador: ele confere cada parte e ajusta o que faltar. Você não precisa fazer nada.",
               font=("Segoe UI", 12))
         lista = tk.Frame(p, bg=PAPEL)
         lista.pack(fill="x", pady=(16, 0))
@@ -909,7 +908,7 @@ class Janela:
         e = self.tg_etapas[2]
         texto(e, "Diga oi para o seu robô", bg="white", font=("Segoe UI", 12, "bold"))
         texto(e, "Abra o seu robô no Telegram, toque em Iniciar ou mande um oi. Ele responde com um código: não precisa "
-                 "fazer nada, o assistente aprova você sozinho.", bg="white")
+                 "fazer nada, o configurador aprova você sozinho.", bg="white")
         self.btn_robo = botao(e, "Abrir o meu robô", self.abrir_robo)
         self.btn_robo.pack(anchor="w", pady=(10, 0))
         lista(e, (("recebida", "Mensagem recebida"), ("aprovado", "Você aprovado como dono do robô"),
@@ -923,7 +922,7 @@ class Janela:
         self.tg_mostrar(0)
 
         p = self.paginas[5]
-        texto(p, "Checkup final: o instalador testa de verdade cada parte do Assessor.", font=("Segoe UI", 12))
+        texto(p, "Checkup final: o configurador testa de verdade cada parte do Assessor.", font=("Segoe UI", 12))
         self.resumo = tk.Frame(p, bg=PAPEL)
         self.resumo.pack(fill="x", pady=(12, 0))
         self.ck = {}
@@ -1263,8 +1262,8 @@ class Janela:
             if erro:
                 self.ck_resumo.config(text=f"O checkup não terminou: {erro}", fg=ERRO)
             elif problemas:
-                self.ck_resumo.config(text=f"Atenção: {problemas} item(ns) com problema. Abra o Instalar-Assessor de novo para "
-                                           "ajustar; se continuar, use o Remover-Hermes e instale do zero.", fg=ERRO)
+                self.ck_resumo.config(text=f"Atenção: {problemas} item(ns) com problema. Abra o Configurar-Assessor de novo para "
+                                           "ajustar; se o problema for no Hermes, reinstale pelo site oficial.", fg=ERRO)
             else:
                 self.ck_resumo.config(text="✓  Tudo funcionando. O Assessor está pronto para usar.", fg=OK)
                 self.final.config(text=("Fale com o Assessor pelo seu robô no Telegram ou pelo aplicativo Hermes. Na primeira "
