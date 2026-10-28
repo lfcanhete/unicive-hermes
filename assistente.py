@@ -268,6 +268,7 @@ def tarefa_verificar(sub):
         estado["google"] = False
         log(f"Google: configuração não disponível no site ({e}).")
         sub(4, "pulado")
+    ligar_no_login()
 
 
 # ---------- Passo 3: Claude ----------
@@ -411,24 +412,9 @@ def tarefa_google():
         log(f"Não consegui ler o endereço do Gmail: {e}")
 
 
-# ---------- Passo 5: Telegram ----------
-# Quem conversa com o Telegram e o proprio Hermes: o assistente grava o token, liga o gateway e
-# aprova o pareamento do dono pelo comando do Hermes.
-def log_gateway_desde(marco, padrao):
-    arq = os.path.join(HOME, "logs", "gateway.log")
-    if not os.path.isfile(arq):
-        return False
-    try:
-        with open(arq, "rb") as f:
-            f.seek(max(0, os.path.getsize(arq) - 400000))
-            texto = f.read().decode("utf-8", errors="replace")
-    except OSError:
-        return False
-    return any(l[:19] >= marco and re.search(padrao, l) for l in texto.splitlines() if len(l) >= 19)
-
-
-INICIAR_TELEGRAM = r"""@echo off
-rem UNICIVE - liga o Assessor no Telegram ao entrar no Windows (criado pelo instalador do Assessor).
+# ---------- Telegram (configurado a mao, pelo tutorial do site) ----------
+INICIAR = r"""@echo off
+rem UNICIVE - liga o Assessor (e o Telegram, se configurado) ao entrar no Windows.
 rem O Hermes grava um .vbs na inicializacao para isso, mas o antivirus costuma remover; este e o reserva.
 if not "%~1"=="min" (start "" /min "%~f0" min & exit /b)
 rem Espera o login assentar e o .vbs do Hermes (se existir) ligar primeiro; "start" nao duplica.
@@ -441,36 +427,14 @@ exit /b
 
 
 def ligar_no_login():
-    """Garante que o Telegram volta sozinho depois de reiniciar o computador."""
+    """Garante que o Assessor (e o Telegram) volta sozinho depois de reiniciar o computador."""
     pasta = os.path.join(os.environ["APPDATA"], "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
     try:
         with open(os.path.join(pasta, "Assessor-Telegram.cmd"), "w", encoding="ascii", newline="\r\n") as f:
-            f.write(INICIAR_TELEGRAM)
-        log("Telegram: o Assessor liga sozinho ao entrar no Windows.")
+            f.write(INICIAR)
+        log("Início automático: o Assessor liga sozinho ao entrar no Windows.")
     except OSError as e:
-        log(f"Aviso: não consegui deixar o Telegram ligando com o Windows ({e}).")
-
-
-def telegram_ja_configurado():
-    hx = achar_hermes()
-    if not hx or not ler_env("TELEGRAM_BOT_TOKEN"):
-        return False
-    lista = executar([hx, "pairing", "list"], quieto=True)[1]
-    if not (re.search(r"(?ms)Approved Users.*?^\s*telegram\s+\S+", lista) or ler_env("TELEGRAM_ALLOWED_USERS")):
-        return False
-    if re.search(r"(?i)not running", executar([hx, "gateway", "status"], quieto=True)[1]):
-        log("O Assessor estava desligado no Telegram. Ligando...")
-        executar([hx, "gateway", "install", "--if-missing", "--start-now", "--start-on-login"])
-        executar([hx, "gateway", "restart"])
-    else:
-        log("Telegram: o Assessor está ligado.")
-    ligar_no_login()
-    return True
-
-
-CONFLITO = r"(?i)telegram.*(conflict|terminated by other getUpdates)"
-# "Unauthorized user" no log e so alguem ainda nao pareado: nao entra aqui.
-RECUSADO = r"(?i)(InvalidToken|No bot token|token \S* ?(rejected|invalid)|telegram.*non-retryable fatal)"
+        log(f"Aviso: não consegui deixar o Assessor ligando com o Windows ({e}).")
 
 
 def dono_aprovado(hx):
@@ -478,82 +442,7 @@ def dono_aprovado(hx):
     return bool(re.search(r"(?ms)Approved Users.*?^\s*telegram\s+\S+", lista) or ler_env("TELEGRAM_ALLOWED_USERS"))
 
 
-def fase(nome, situacao):
-    """Atualiza a lista de andamento do Telegram na janela."""
-    na_tela(lambda: janela.tg_fase(nome, situacao))
-
-
-def tarefa_telegram(token):
-    hx = achar_hermes()
-    fase("token", "ok")
-    if ler_env("TELEGRAM_BOT_TOKEN") == token and dono_aprovado(hx):
-        # Mesmo robo ja configurado e com dono: nao desfaz o pareamento, so garante que esta ligado.
-        log("Este robô já está configurado e com o dono aprovado.")
-        telegram_ja_configurado()
-        for n in ("ligado", "recebida", "aprovado", "boasvindas"):
-            fase(n, "ok")
-        return
-    fase("ligado", "ativo")
-    marco = time.strftime("%Y-%m-%d %H:%M:%S")
-    # Sem lista de usuarios autorizados, o Hermes responde ao primeiro oi com um codigo de pareamento.
-    salvar_env({"TELEGRAM_BOT_TOKEN": token, "TELEGRAM_ALLOWED_USERS": None, "TELEGRAM_HOME_CHANNEL": None})
-    # Pareamentos de uma instalacao anterior fariam o Hermes nao pedir codigo: comeca do zero.
-    lista = executar([hx, "pairing", "list"], quieto=True)[1]
-    aprovados = False
-    for l in lista.splitlines():
-        if "Approved Users" in l:
-            aprovados = True
-        elif aprovados and re.match(r"^\s*telegram\s+(\S+)", l):
-            executar([hx, "pairing", "revoke", "telegram", l.split()[1]], quieto=True)
-    executar([hx, "pairing", "clear-pending"], quieto=True)
-    log("Ligando o Assessor no Telegram (inicia junto com o Windows)...")
-    executar([hx, "gateway", "install", "--if-missing", "--start-now", "--start-on-login"])
-    executar([hx, "gateway", "restart"])
-    inicio = time.time()
-    while not log_gateway_desde(marco, r"telegram connected"):
-        if estado["cancelar"]:
-            raise Falha("Cancelado.")
-        if log_gateway_desde(marco, CONFLITO):
-            raise Falha("Este robô já está ligado em outro computador. Cada computador precisa do seu próprio robô: crie outro no BotFather.")
-        if log_gateway_desde(marco, RECUSADO):
-            raise Falha("O Telegram não aceitou este token. Copie de novo a mensagem do BotFather.")
-        if time.time() - inicio > 150:
-            raise Falha("O Assessor não conseguiu se conectar ao Telegram. Confira a internet e tente de novo.")
-        time.sleep(2)
-    fase("ligado", "ok")
-    na_tela(janela.telegram_pedir_oi)
-    fase("recebida", "ativo")
-    log("Conectado ao Telegram. Aguardando a sua mensagem...")
-    inicio = time.time()
-    while True:
-        if estado["cancelar"]:
-            raise Falha("Cancelado.")
-        if time.time() - inicio > 900:
-            raise Falha("Não chegou nenhuma mensagem no robô.")
-        if log_gateway_desde(marco, CONFLITO):
-            raise Falha("Este robô já está ligado em outro computador. Cada computador precisa do seu próprio robô: crie outro no BotFather.")
-        time.sleep(3)
-        m = re.search(r"(?m)^\s*telegram\s+(\S+)\s+(\S+)\s+(.*?)\s+\d+m ago", executar([hx, "pairing", "list"], quieto=True)[1])
-        if m and m.group(1) != "-":
-            nome, uid = m.group(3).strip(), m.group(2)
-            estado["tg_nome"] = nome
-            fase("recebida", "ok")
-            fase("aprovado", "ativo")
-            log(f"Mensagem recebida de {nome}. Aprovando...")
-            if executar([hx, "pairing", "approve", "telegram", m.group(1)])[0] != 0:
-                raise Falha("Não consegui aprovar o seu acesso ao robô.")
-            salvar_env({"TELEGRAM_HOME_CHANNEL": uid})
-            fase("aprovado", "ok")
-            fase("boasvindas", "ativo")
-            primeiro = f", {nome.split()[0]}" if nome else ""
-            executar([hx, "send", "-t", f"telegram:{uid}", f"Olá{primeiro}! Aqui é o Assessor, assistente da direção do UNICIVE. "
-                      "Pronto: a partir de agora você pode falar comigo por aqui."])
-            fase("boasvindas", "ok")
-            ligar_no_login()
-            return
-
-
-# ---------- Passo 6: checkup completo ----------
+# ---------- Passo 5: checkup completo ----------
 def executar_com_limite(args, segundos):
     """Roda um comando com tempo maximo; devolve (codigo, texto) ou (None, '') se estourar."""
     try:
@@ -666,17 +555,17 @@ def tarefa_checkup(item):
             item("inicio", "erro", "O Telegram não vai ligar sozinho depois de reiniciar")
             problemas += 1
     else:
-        item("telegram", "pulado", "Telegram: não conectado")
-        item("inicio", "pulado", "Início automático do Telegram: não se aplica")
+        item("telegram", "pulado", "Telegram: ainda não configurado (veja o tutorial no site)")
+        item("inicio", "pulado", "Início automático do Telegram: depois de configurar o Telegram")
     return problemas
 
 
 # ---------- Janela ----------
-PASSOS = ["Boas-vindas", "Verificação", "Claude", "Google", "Telegram", "Pronto"]
+PASSOS = ["Boas-vindas", "Verificação", "Claude", "Google", "Pronto"]
 TITULOS = ["Vamos deixar o Assessor pronto", "Verificando e ajustando", "Conecte o Claude", "Conecte o Google",
-           "Conecte o Telegram", "Checkup final"]
+           "Checkup final"]
 STATUS = ["Pronto para começar", "Verificando... pode levar alguns minutos", "Aguardando o login do Claude",
-          "Aguardando o login do Google", "Aguardando o Telegram", "Instalação concluída"]
+          "Aguardando o login do Google", "Configuração concluída"]
 SUBS = ["Hermes", "Aplicativo Hermes", "Claude Sonnet 5.5 e o Assessor", "Claude Code (acesso aos modelos mais novos)",
         "Conexão com o Google"]
 
@@ -761,7 +650,7 @@ class Janela:
         lateral.pack_propagate(False)
         tk.Label(lateral, text="UNICIVE · DIREÇÃO", bg=VERDE, fg=OURO, font=("Segoe UI", 8, "bold")).pack(anchor="w")
         tk.Label(lateral, text="Assessor", bg=VERDE, fg="white", font=("Georgia", 26)).pack(anchor="w", pady=(4, 0))
-        tk.Label(lateral, text="Instalação guiada", bg=VERDE, fg=NEVOA, font=("Segoe UI", 10)).pack(anchor="w", pady=(0, 36))
+        tk.Label(lateral, text="Configuração guiada", bg=VERDE, fg=NEVOA, font=("Segoe UI", 10)).pack(anchor="w", pady=(0, 36))
         self.passos = [Marcador(lateral, n, str(i + 1), True) for i, n in enumerate(PASSOS)]
         tk.Label(lateral, text="Dúvidas? Chame o Luiz Fernando.", bg=VERDE, fg=NEVOA, font=("Segoe UI", 9),
                  wraplength=190, justify="left").pack(side="bottom", anchor="w")
@@ -801,10 +690,10 @@ class Janela:
     def montar_paginas(self):
         p = self.paginas[0]
         texto(p, "Este configurador deixa o Assessor pronto no seu Hermes: confere a instalação, ajusta o que faltar e conecta o "
-                 "Claude, o Google e o Telegram. O que já estiver certo passa sozinho.", font=("Segoe UI", 12))
+                 "Claude e o Google. O que já estiver certo passa sozinho.", font=("Segoe UI", 12))
         tk.Frame(p, bg=PAPEL, height=14).pack()
         texto(p, "Tenha por perto:", font=("Segoe UI", 11, "bold"))
-        for item in ("a sua conta do Claude", "a sua conta @unicive.edu.br", "o Telegram instalado no celular ou no computador"):
+        for item in ("a sua conta do Claude", "a sua conta @unicive.edu.br"):
             texto(p, "•   " + item)
         aviso = tk.Frame(p, bg="#FFF1DA", padx=14, pady=10)
         aviso.pack(fill="x", pady=(18, 0))
@@ -848,80 +737,7 @@ class Janela:
         self.btn_google.pack(anchor="w", pady=(16, 0))
         self.st_google = texto(p, "", font=("Segoe UI", 11, "bold"))
 
-        # Telegram em etapas: uma de cada vez, cada uma com a sua lista de andamento.
         p = self.paginas[4]
-        texto(p, "Pelo Telegram você fala com o Assessor de qualquer lugar. São três etapas rápidas:", font=("Segoe UI", 12))
-        trilha = tk.Frame(p, bg=PAPEL)
-        trilha.pack(fill="x", pady=(10, 0))
-        self.tg_trilha = []
-        for i, nome in enumerate(("Criar o robô", "Colar o token", "Dizer oi")):
-            if i:
-                tk.Label(trilha, text="›", bg=PAPEL, fg=NEVOA, font=("Segoe UI", 12)).pack(side="left", padx=6)
-            rot = tk.Label(trilha, text=f" {i + 1}  {nome} ", font=("Segoe UI", 10, "bold"), padx=8, pady=3)
-            rot.pack(side="left")
-            self.tg_trilha.append(rot)
-        caixa = tk.Frame(p, bg="white", padx=18, pady=14)
-        caixa.pack(fill="x", pady=(10, 0))
-        self.tg_etapas = [tk.Frame(caixa, bg="white") for _ in range(4)]
-        self.tg_marcas = {}
-
-        def lista(pai, itens):
-            quadro = tk.Frame(pai, bg="white")
-            quadro.pack(fill="x", pady=(10, 0))
-            for chave, rotulo in itens:
-                m = Marcador(quadro, rotulo, "•", False)
-                for w in (m.quadro, m.bola, m.texto):
-                    w.config(bg="white")
-                m.marcar("pendente")
-                self.tg_marcas[chave] = m
-
-        e = self.tg_etapas[0]
-        texto(e, "Crie o seu robô no BotFather", bg="white", font=("Segoe UI", 12, "bold"))
-        for linha_txt in ("1.  Clique em Abrir o BotFather (abre o Telegram).",
-                          "2.  Toque em Iniciar e envie /newbot.",
-                          "3.  Dê um nome, por exemplo: Assessor Marcela.",
-                          "4.  Dê um usuário que termine em bot, por exemplo: assessor_marcela_bot.",
-                          "5.  Ele responde com uma mensagem que tem o token. Já tem um robô? Envie /token."):
-            texto(e, linha_txt, bg="white")
-        botoes = tk.Frame(e, bg="white")
-        botoes.pack(anchor="w", pady=(12, 0))
-        botao(botoes, "Abrir o BotFather", lambda: webbrowser.open("https://t.me/BotFather"), primario=False).pack(side="left")
-        botao(botoes, "Já criei o robô  →", lambda: self.tg_mostrar(1)).pack(side="left", padx=(10, 0))
-
-        e = self.tg_etapas[1]
-        texto(e, "Cole a mensagem do BotFather", bg="white", font=("Segoe UI", 12, "bold"))
-        texto(e, "Copie a mensagem inteira que tem o token (números, dois-pontos e letras, como 7812345678:AAH...) e cole "
-                 "abaixo com Ctrl+V. O assistente confere e liga tudo sozinho.", bg="white")
-        self.token = tk.StringVar()
-        linha = tk.Frame(e, bg="white")
-        linha.pack(anchor="w", pady=(8, 0))
-        self.campo_token = tk.Entry(linha, textvariable=self.token, font=("Consolas", 10), width=46)
-        self.campo_token.pack(side="left", ipady=5)
-        botao(linha, "Verificar", lambda: self.token_colado(forcar=True), primario=False).pack(side="left", padx=(10, 0))
-        self.token.trace_add("write", lambda *a: self.token_colado())
-        self.st_token = texto(e, "", bg="white", font=("Segoe UI", 10, "bold"))
-        lista(e, (("token", "Token reconhecido"), ("ligado", "Assessor ligado no Telegram (até 1 minuto)")))
-        voltar = tk.Label(e, text="← Voltar", bg="white", fg=VERDE_MEIO, cursor="hand2", font=("Segoe UI", 9))
-        voltar.pack(anchor="w", pady=(8, 0))
-        voltar.bind("<Button-1>", lambda ev: self.tg_mostrar(0))
-
-        e = self.tg_etapas[2]
-        texto(e, "Diga oi para o seu robô", bg="white", font=("Segoe UI", 12, "bold"))
-        texto(e, "Abra o seu robô no Telegram, toque em Iniciar ou mande um oi. Ele responde com um código: não precisa "
-                 "fazer nada, o configurador aprova você sozinho.", bg="white")
-        self.btn_robo = botao(e, "Abrir o meu robô", self.abrir_robo)
-        self.btn_robo.pack(anchor="w", pady=(10, 0))
-        lista(e, (("recebida", "Mensagem recebida"), ("aprovado", "Você aprovado como dono do robô"),
-                  ("boasvindas", "Mensagem de boas-vindas enviada")))
-
-        e = self.tg_etapas[3]
-        self.tg_final = texto(e, "✓  Telegram conectado!", bg="white", fg=OK, font=("Georgia", 18))
-        self.tg_final_txt = texto(e, "", bg="white")
-
-        self.st_telegram = texto(caixa, "", bg="white", font=("Segoe UI", 10, "bold"))
-        self.tg_mostrar(0)
-
-        p = self.paginas[5]
         texto(p, "Checkup final: o configurador testa de verdade cada parte do Assessor.", font=("Segoe UI", 12))
         self.resumo = tk.Frame(p, bg=PAPEL)
         self.resumo.pack(fill="x", pady=(12, 0))
@@ -953,9 +769,9 @@ class Janela:
         self.txt_passo.config(text=f"PASSO {i + 1} DE {len(PASSOS)}")
         self.titulo.config(text=TITULOS[i])
         self.status.config(text=STATUS[i])
-        self.btn_avancar.config(text="Começar" if i == 0 else "Concluir" if i == 5 else "Continuar",
-                                state="normal" if i in (0, 5) else "disabled")
-        if i in (3, 4):
+        self.btn_avancar.config(text="Começar" if i == 0 else "Concluir" if i == 4 else "Continuar",
+                                state="normal" if i in (0, 4) else "disabled")
+        if i == 3:
             self.btn_pular.pack(side="left")
         else:
             self.btn_pular.pack_forget()
@@ -975,8 +791,6 @@ class Janela:
                 self.concluir(3, "ok")
                 self.raiz.after(1200, lambda: self.ir(4))
         elif i == 4:
-            self.rodar(telegram_ja_configurado, self.depois_checar_telegram)
-        elif i == 5:
             self.montar_resumo()
 
     def concluir(self, i, situacao):
@@ -989,7 +803,7 @@ class Janela:
             self.ir(1)
         elif self.pagina == 1:
             self.ir(2) if not self.feito.get("verif_erro") else self.verificar()
-        elif self.pagina == 5:
+        elif self.pagina == 4:
             self.fechar()
         else:
             if self.pagina not in self.feito:
@@ -1124,120 +938,6 @@ class Janela:
 
         self.rodar(tarefa_google, fim)
 
-    # ----- Telegram em etapas -----
-    def tg_mostrar(self, i):
-        """Mostra so a etapa i do Telegram (0 criar, 1 token, 2 oi, 3 conectado) e acende a trilha."""
-        for k, e in enumerate(self.tg_etapas):
-            if k == i:
-                e.pack(fill="x", before=self.st_telegram)
-            else:
-                e.pack_forget()
-        for k, rot in enumerate(self.tg_trilha):
-            if k < i:
-                rot.config(bg=MENTA, fg=VERDE_ESC, text=f" ✓  {rot.cget('text').split('  ', 1)[1]}")
-            elif k == i:
-                rot.config(bg=OURO, fg=VERDE_ESC)
-            else:
-                rot.config(bg="#E3EFE9", fg="#6B8F82")
-        if i == 1:
-            self.campo_token.focus_set()
-        if i != 1 or not self.st_telegram.cget("text").startswith("Não deu certo"):
-            self.st_telegram.config(text="")
-
-    def tg_fase(self, nome, situacao):
-        m = self.tg_marcas.get(nome)
-        if m:
-            m.marcar(situacao)
-
-    def depois_checar_telegram(self, configurado, erro):
-        if configurado and self.pagina == 4:
-            for m in self.tg_marcas.values():
-                m.marcar("ok")
-            self.tg_final_txt.config(text="Este computador já está conectado ao Telegram e o Assessor está ligado.")
-            self.tg_mostrar(3)
-            self.concluir(4, "ok")
-            self.btn_avancar.config(state="normal")
-            self.btn_pular.pack_forget()
-            self.raiz.after(1800, lambda: self.ir(5))
-        elif self.pagina == 4 and self.token.get().strip():
-            self.token_colado()
-
-    def token_colado(self, forcar=False):
-        bruto = self.token.get()
-        if forcar:
-            # Clicou em Verificar: tenta de novo mesmo que seja o mesmo token de uma tentativa anterior.
-            estado.pop("tg_token", None)
-            if not bruto.strip():
-                self.st_token.config(text="Cole primeiro a mensagem do BotFather com o token.", fg=ERRO)
-                return
-        # A mensagem do BotFather traz o link t.me/usuario_do_robo: guarda para o botao "Abrir".
-        u = re.search(r"t\.me/(\w+bot)", bruto, re.I)
-        if u:
-            estado["tg_robo"] = u.group(1)
-        t = re.search(r"\d{5,15}:[\w-]{30,}", bruto)
-        if not t:
-            # Texto colado que nao e token: explica em vez de ficar calado.
-            if bruto.strip() and "#" in bruto:
-                self.st_token.config(text="Isso é o código do Claude, não o token do Telegram. Copie a mensagem do BotFather "
-                                          "que tem o token (ou mande /token para ele) e cole aqui.", fg=ERRO)
-            elif len(bruto.strip()) > 8:
-                self.st_token.config(text="Isso não parece o token do Telegram. Ele tem números, dois-pontos e letras, assim: "
-                                          "7812345678:AAH... Copie a mensagem do BotFather e cole aqui.", fg=ERRO)
-            else:
-                self.st_token.config(text="")
-            return
-        if self.feito.get(4) == "ok" and t.group(0) == estado.get("tg_ok"):
-            # Ja conectado com este robo: repetir a configuracao desfaria o pareamento.
-            self.tg_mostrar(3)
-            return
-        if t.group(0) == estado.get("tg_token"):
-            return
-        if self.tarefa and self.tarefa.is_alive():
-            # Uma verificacao ainda esta terminando: tenta de novo em seguida.
-            self.raiz.after(1000, self.token_colado)
-            return
-        if self.tg_etapas[0].winfo_ismapped():
-            self.tg_mostrar(1)
-        estado["tg_token"] = t.group(0)
-        if bruto != t.group(0):
-            self.token.set(t.group(0))
-        for m in self.tg_marcas.values():
-            m.marcar("pendente")
-        self.st_token.config(text="Token recebido. Conferindo e ligando o Assessor no Telegram...", fg=VERDE_MEIO)
-
-        def fim(_, erro):
-            if erro:
-                estado.pop("tg_token", None)
-                for m in self.tg_marcas.values():
-                    if m.estado == "ativo":
-                        m.marcar("erro")
-                if erro != "Cancelado.":
-                    self.st_telegram.config(text=f"Não deu certo: {erro}", fg=ERRO)
-                    self.st_token.config(text="")
-            else:
-                estado["tg_ok"] = estado.get("tg_token")
-                nome, robo = estado.get("tg_nome", ""), estado.get("tg_robo")
-                self.tg_final.config(text=f"✓  Telegram conectado{', ' + nome.split()[0] if nome else ''}!")
-                self.tg_final_txt.config(text=(f"O seu robô {'@' + robo + ' ' if robo else ''}já está ligado ao Assessor e "
-                                               "mandou uma mensagem de boas-vindas. Ele fica ligado sempre que o computador "
-                                               "estiver ligado. Clique em Continuar."))
-                self.tg_mostrar(3)
-                self.btn_pular.pack_forget()
-                self.concluir(4, "ok")
-                self.btn_avancar.config(state="normal")
-
-        self.rodar(tarefa_telegram, fim, t.group(0))
-
-    def telegram_pedir_oi(self):
-        self.st_token.config(text="")
-        self.tg_mostrar(2)
-        robo = estado.get("tg_robo")
-        self.btn_robo.config(text=f"Abrir @{robo}" if robo else "Abrir o Telegram")
-
-    def abrir_robo(self):
-        robo = estado.get("tg_robo")
-        webbrowser.open(f"https://t.me/{robo}" if robo else "https://web.telegram.org/")
-
     def montar_resumo(self):
         """Roda o checkup completo e mostra cada item com o resultado."""
         if self.tarefa and self.tarefa.is_alive():
@@ -1257,7 +957,7 @@ class Janela:
 
         def fim(problemas, erro):
             self.btn_checkup.config(state="normal")
-            if self.pagina == 5:
+            if self.pagina == 4:
                 self.titulo.config(text="Tudo pronto!" if not erro and not problemas else "Quase pronto")
             if erro:
                 self.ck_resumo.config(text=f"O checkup não terminou: {erro}", fg=ERRO)
@@ -1307,7 +1007,7 @@ class Janela:
             self.status.config(text=STATUS[self.pagina])
         feitos = sum(1 for p in self.passos if p.estado in ("ok", "pulado"))
         fracao = sum(1 for s in self.subs if s.estado in ("ok", "pulado", "erro")) / len(self.subs) if self.pagina == 1 else 0
-        pct = 100 if self.pagina == 5 else int((feitos + fracao) / len(PASSOS) * 100)
+        pct = 100 if self.pagina == 4 else int((feitos + fracao) / len(PASSOS) * 100)
         self.barra_geral["value"] = pct
         self.pct.config(text=f"{pct}%")
         self.raiz.after(150, self.relogio)
