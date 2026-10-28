@@ -445,11 +445,22 @@ def telegram_ja_configurado():
 
 
 CONFLITO = r"(?i)telegram.*(conflict|terminated by other getUpdates)"
-RECUSADO = r"(?i)(InvalidToken|Unauthorized|No bot token|telegram.*(rejected|forbidden|non-retryable fatal))"
+# "Unauthorized user" no log e so alguem ainda nao pareado: nao entra aqui.
+RECUSADO = r"(?i)(InvalidToken|No bot token|token \S* ?(rejected|invalid)|telegram.*non-retryable fatal)"
+
+
+def dono_aprovado(hx):
+    lista = executar([hx, "pairing", "list"], quieto=True)[1]
+    return bool(re.search(r"(?ms)Approved Users.*?^\s*telegram\s+\S+", lista) or ler_env("TELEGRAM_ALLOWED_USERS"))
 
 
 def tarefa_telegram(token):
     hx = achar_hermes()
+    if ler_env("TELEGRAM_BOT_TOKEN") == token and dono_aprovado(hx):
+        # Mesmo robo ja configurado e com dono: nao desfaz o pareamento, so garante que esta ligado.
+        log("Este robô já está configurado e com o dono aprovado.")
+        telegram_ja_configurado()
+        return
     marco = time.strftime("%Y-%m-%d %H:%M:%S")
     # Sem lista de usuarios autorizados, o Hermes responde ao primeiro oi com um codigo de pareamento.
     salvar_env({"TELEGRAM_BOT_TOKEN": token, "TELEGRAM_ALLOWED_USERS": None, "TELEGRAM_HOME_CHANNEL": None})
@@ -788,12 +799,14 @@ class Janela:
                 r = funcao(*args)
                 na_tela(lambda: ao_terminar(r, None))
             except Falha as e:
-                log("ERRO: " + str(e))
-                na_tela(lambda: ao_terminar(None, str(e)))
+                msg = str(e)
+                log("ERRO: " + msg)
+                na_tela(lambda: ao_terminar(None, msg))
             except Exception as e:
+                msg = str(e)
                 registrar(traceback.format_exc())
-                log("ERRO: " + str(e))
-                na_tela(lambda: ao_terminar(None, str(e)))
+                log("ERRO: " + msg)
+                na_tela(lambda: ao_terminar(None, msg))
 
         self.tarefa = threading.Thread(target=alvo, daemon=True)
         self.tarefa.start()
@@ -923,6 +936,10 @@ class Janela:
             else:
                 self.st_token.config(text="")
             return
+        if self.feito.get(4) == "ok" and t.group(0) == estado.get("tg_ok"):
+            # Ja conectado com este robo: repetir a configuracao desfaria o pareamento.
+            self.st_token.config(text="✓  Este robô já está conectado. Pode clicar em Continuar.", fg=OK)
+            return
         if t.group(0) == estado.get("tg_token"):
             return
         if self.tarefa and self.tarefa.is_alive():
@@ -940,6 +957,7 @@ class Janela:
                 if erro != "Cancelado.":
                     self.st_telegram.config(text=f"Não deu certo: {erro}", fg=ERRO)
             else:
+                estado["tg_ok"] = estado.get("tg_token")
                 nome = estado.get("tg_nome", "")
                 self.st_telegram.config(text=f"✓  Pronto{', ' + nome if nome else ''}! O Assessor já mandou uma mensagem para você "
                                              "e fica ligado sempre que o computador estiver ligado.", fg=OK)
