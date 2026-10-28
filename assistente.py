@@ -688,7 +688,10 @@ class Janela:
         c = cartao(p)
         texto(c, "2.  Cole o token (Ctrl+V)", font=("Segoe UI", 11, "bold"))
         self.token = tk.StringVar()
-        tk.Entry(c, textvariable=self.token, font=("Consolas", 10), width=52).pack(anchor="w", pady=(6, 0), ipady=5)
+        linha = tk.Frame(c, bg="white")
+        linha.pack(anchor="w", pady=(6, 0))
+        tk.Entry(linha, textvariable=self.token, font=("Consolas", 10), width=46).pack(side="left", ipady=5)
+        botao(linha, "Verificar", lambda: self.token_colado(forcar=True), primario=False).pack(side="left", padx=(10, 0))
         self.token.trace_add("write", lambda *a: self.token_colado())
         self.st_token = texto(c, "", bg="white", font=("Segoe UI", 10, "bold"))
         c = cartao(p)
@@ -896,8 +899,14 @@ class Janela:
         elif self.pagina == 4 and self.token.get().strip():
             self.token_colado()
 
-    def token_colado(self):
+    def token_colado(self, forcar=False):
         bruto = self.token.get()
+        if forcar:
+            # Clicou em Verificar: tenta de novo mesmo que seja o mesmo token de uma tentativa anterior.
+            estado.pop("tg_token", None)
+            if not bruto.strip():
+                self.st_token.config(text="Cole primeiro a mensagem do BotFather com o token.", fg=ERRO)
+                return
         # A mensagem do BotFather traz o link t.me/usuario_do_robo: guarda para o botao "Abrir".
         u = re.search(r"t\.me/(\w+bot)\b", bruto, re.I)
         if u:
