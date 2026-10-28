@@ -1,6 +1,56 @@
 @echo off
+rem UNICIVE - Instalador do Assessor. Sem PowerShell: usa o curl do Windows, o Hermes-Setup.exe oficial
+rem (assinado pela Nous Research) e o assistente em Python que roda no Python do proprio Hermes.
 title Instalador do Assessor - UNICIVE
-echo Abrindo o instalador do Assessor. Aguarde...
-set "UNICIVE_LAUNCHER=1"
-powershell -NoProfile -ExecutionPolicy Bypass -STA -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; try { $s = (Invoke-WebRequest 'https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main/instalador.ps1' -UseBasicParsing -ErrorAction Stop).Content } catch { Write-Host ''; Write-Host 'Nao consegui baixar o instalador do GitHub.' -ForegroundColor Red; Write-Host $_.Exception.Message; Write-Host 'A rede pode estar bloqueando o github.com. Tente em outra rede (por exemplo, o roteador do celular).'; exit 1 }; if ($s -is [byte[]]) { $s = [Text.Encoding]::UTF8.GetString($s) }; $s = $s.TrimStart([char]0xFEFF); $f = Join-Path $env:TEMP ('instalador-assessor-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.ps1'); $gravou = $true; try { [IO.File]::WriteAllText($f, $s, (New-Object Text.UTF8Encoding($true))) } catch { $gravou = $false }; if (-not $gravou) { Write-Host ''; Write-Host 'O Windows nao deixou salvar o instalador.' -ForegroundColor Red; Write-Host 'Normalmente e o antivirus (Bitdefender) bloqueando. Peca a TI para liberar o instalador do Assessor e tente de novo.'; exit 1 }; & $f; if (-not $global:UniciveJanelaAbriu) { Write-Host ''; Write-Host 'A janela do instalador nao abriu.' -ForegroundColor Red; $Error | Select-Object -First 5 | ForEach-Object { Write-Host $_ }; exit 1 }"
-if errorlevel 1 pause
+setlocal
+set "HH=%LOCALAPPDATA%\hermes"
+set "AS=%TEMP%\assistente-assessor-%RANDOM%%RANDOM%.py"
+echo.
+echo   Instalador do Assessor - UNICIVE
+echo.
+if exist "%HH%\bin\hermes.exe" goto assistente
+
+echo   [1/2] Instalando o Hermes oficial (Nous Research).
+echo         Uma janela de instalacao vai abrir: siga ate o fim. Depois esta janela continua sozinha.
+curl -fsSL -o "%TEMP%\Hermes-Setup.exe" "https://hermes-assets.nousresearch.com/Hermes-Setup.exe" || goto erro_rede
+start "" /wait "%TEMP%\Hermes-Setup.exe"
+echo         Aguardando o Hermes terminar de instalar...
+set /a N=0
+:esperar
+if exist "%HH%\bin\hermes.exe" goto assistente
+set /a N+=1
+if %N% gtr 180 goto erro_hermes
+timeout /t 5 /nobreak >nul
+goto esperar
+
+:assistente
+set "PY="
+for /d %%D in ("%HH%\tools\python-*") do if exist "%%D\pythonw.exe" set "PY=%%D\pythonw.exe"
+if not defined PY for /r "%HH%\installs" %%F in (pythonw.exe) do if exist "%%F" set "PY=%%F"
+if not defined PY goto erro_python
+echo   [2/2] Abrindo o assistente do Assessor...
+curl -fsSL -o "%AS%" "https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main/assistente.py" || goto erro_rede
+if not exist "%AS%" goto erro_antivirus
+start "" "%PY%" -I "%AS%"
+exit /b 0
+
+:erro_rede
+echo.
+echo   Nao consegui baixar da internet. Confira a conexao e tente de novo.
+pause
+exit /b 1
+:erro_hermes
+echo.
+echo   O Hermes nao terminou de instalar. Feche esta janela e abra o instalador de novo.
+pause
+exit /b 1
+:erro_python
+echo.
+echo   Nao encontrei o Python do Hermes. Feche esta janela e abra o instalador de novo.
+pause
+exit /b 1
+:erro_antivirus
+echo.
+echo   O Windows nao deixou salvar o assistente (normalmente e o antivirus). Tente de novo.
+pause
+exit /b 1
