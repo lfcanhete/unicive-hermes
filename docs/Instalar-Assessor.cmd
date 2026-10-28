@@ -8,9 +8,15 @@ set "AS=%TEMP%\assistente-assessor-%RANDOM%%RANDOM%.py"
 echo.
 echo   Instalador do Assessor - UNICIVE
 echo.
-if exist "%HH%\bin\hermes.exe" goto assistente
+rem Hermes ja instalado e respondendo: nao apaga nada (mantem os logins) e vai para o assistente.
+if exist "%HH%\bin\hermes.exe" (
+    "%HH%\bin\hermes.exe" --version 2>nul | findstr /c:"Hermes Agent v" >nul && goto assistente
+)
 
-echo   [1/2] Instalando o Hermes oficial (Nous Research).
+rem Hermes ausente ou quebrado: limpeza completa antes de instalar, para restos nao travarem a instalacao.
+echo   [1/3] Limpando restos de instalacoes anteriores do Hermes...
+call :limpar
+echo   [2/3] Instalando o Hermes oficial (Nous Research).
 echo         Uma janela de instalacao vai abrir: siga ate o fim. Depois esta janela continua sozinha.
 curl -fsSL -o "%TEMP%\Hermes-Setup.exe" "https://hermes-assets.nousresearch.com/Hermes-Setup.exe" || goto erro_rede
 start "" /wait "%TEMP%\Hermes-Setup.exe"
@@ -27,22 +33,20 @@ goto esperar
 rem O instalador com janela grava um script que o antivirus pode bloquear ("Install didn't finish").
 rem O instalador oficial pelo PowerShell roda direto da internet, sem gravar esse script no disco.
 echo.
-echo         O instalador com janela nao terminou. Tentando o instalador oficial pelo PowerShell...
-echo         (pode levar alguns minutos; nao feche esta janela)
-taskkill /f /im Hermes-Setup.exe >nul 2>&1
-if exist "%HH%\bootstrap-cache" ren "%HH%\bootstrap-cache" "bootstrap-cache.velho-%RANDOM%" >nul 2>&1
+echo         O instalador com janela nao terminou. Limpando o que ele deixou e tentando o instalador
+echo         oficial pelo PowerShell (pode levar alguns minutos; nao feche esta janela)...
+call :limpar
 set "HERMES_NONINTERACTIVE=1"
 powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol='Tls12'; iex (irm https://hermes-agent.nousresearch.com/install.ps1)"
 set "HERMES_NONINTERACTIVE="
 if exist "%HH%\bin\hermes.exe" goto assistente
 goto erro_hermes
-
 :assistente
 set "PY="
 for /d %%D in ("%HH%\tools\python-*") do if exist "%%D\pythonw.exe" set "PY=%%D\pythonw.exe"
 if not defined PY for /r "%HH%\installs" %%F in (pythonw.exe) do if exist "%%F" set "PY=%%F"
 if not defined PY goto erro_python
-echo   [2/2] Abrindo o assistente do Assessor...
+echo   [3/3] Abrindo o assistente do Assessor...
 curl -fsSL -o "%AS%" "https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main/assistente.py" || goto erro_rede
 if not exist "%AS%" goto erro_antivirus
 start "" "%PY%" -I "%AS%"
@@ -71,3 +75,12 @@ echo.
 echo   O Windows nao deixou salvar o assistente (normalmente e o antivirus). Tente de novo.
 pause
 exit /b 1
+
+:limpar
+rem Limpeza completa sem perguntas, com o mesmo Remover-Hermes.cmd do site.
+set "RM=%TEMP%\remover-hermes-%RANDOM%%RANDOM%.cmd"
+curl -fsSL -o "%RM%" "https://lfcanhete.github.io/unicive-hermes/Remover-Hermes.cmd" || exit /b 0
+if exist "%RM%" call "%RM%" /auto
+del /q "%RM%" >nul 2>&1
+title Instalador do Assessor - UNICIVE
+exit /b 0

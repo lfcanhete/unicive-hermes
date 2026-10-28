@@ -4,9 +4,13 @@ rem Apaga o Hermes, os dados do aplicativo, o Python que ele usa, os restos do i
 rem inicializacao automatica e os atalhos. Nao mexe no Claude Code.
 title Remover o Hermes - UNICIVE
 setlocal EnableExtensions
+rem /auto: chamado pelo Instalar-Assessor antes de instalar; nao pergunta nem pausa.
+set "AUTO="
+if /i "%~1"=="/auto" set "AUTO=1"
 set "HH=%LOCALAPPDATA%\hermes"
 if defined HERMES_HOME set "HH=%HERMES_HOME%"
 set "INI=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
+if defined AUTO goto limpar
 echo.
 echo   Remover o Hermes - limpeza completa - UNICIVE
 echo.
@@ -19,6 +23,7 @@ echo.
 choice /c SN /m "  Apagar tudo"
 if errorlevel 2 goto fim
 
+:limpar
 echo.
 echo   [1/5] Fechando o Hermes...
 if exist "%HH%\bin\hermes.exe" "%HH%\bin\hermes.exe" gateway stop >nul 2>&1
@@ -61,6 +66,7 @@ if not defined UNICIVE_TESTE (
 if exist "%HH%" goto preso
 echo.
 echo   Pronto: o Hermes foi removido por completo.
+if defined AUTO exit /b 0
 echo   Agora abra o Instalar-Assessor de novo.
 echo.
 pause
@@ -79,7 +85,7 @@ if exist "%HH%" (
     echo   Pode abrir o Instalar-Assessor agora. Rode este arquivo de novo outro dia para terminar a limpeza.
 )
 echo.
-pause
+if not defined AUTO pause
 exit /b 1
 
 :fim
