@@ -19,7 +19,7 @@ set /a N=0
 :esperar
 if exist "%HH%\bin\hermes.exe" goto assistente
 set /a N+=1
-if %N% gtr 180 goto erro_hermes
+if %N% gtr 24 goto erro_hermes
 ping -n 6 127.0.0.1 >nul
 goto esperar
 
@@ -41,7 +41,10 @@ pause
 exit /b 1
 :erro_hermes
 echo.
-echo   O Hermes nao terminou de instalar. Feche esta janela e abra o instalador de novo.
+echo   O instalador oficial do Hermes nao terminou (por exemplo: "Install didn't finish").
+echo   1. Feche o Hermes, inclusive o icone perto do relogio.
+echo   2. Baixe e rode o Remover-Hermes.cmd: https://lfcanhete.github.io/unicive-hermes/Remover-Hermes.cmd
+echo   3. Abra este instalador de novo.
 pause
 exit /b 1
 :erro_python
