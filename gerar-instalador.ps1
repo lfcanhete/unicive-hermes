@@ -17,9 +17,18 @@ if ($ClientSecret) {
     $b64 = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes((Resolve-Path $ClientSecret)))
     $linhas += "set ""UNICIVE_GOOGLE=$b64"""
 }
+# Se o download falhar ou a janela nao abrir, a janela preta fica aberta explicando o motivo.
+$ps = "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; " +
+      "`$f = Join-Path `$env:TEMP 'instalador-assessor.ps1'; " +
+      "try { Invoke-WebRequest '$url' -OutFile `$f -UseBasicParsing -ErrorAction Stop } " +
+      "catch { Write-Host ''; Write-Host 'Nao consegui baixar o instalador do GitHub.' -ForegroundColor Red; Write-Host `$_.Exception.Message; " +
+      "Write-Host 'A rede pode estar bloqueando o github.com. Tente em outra rede (por exemplo, o roteador do celular).'; exit 1 }; " +
+      "& `$f; " +
+      "if (-not `$global:UniciveJanelaAbriu) { Write-Host ''; Write-Host 'A janela do instalador nao abriu.' -ForegroundColor Red; " +
+      "`$Error | Select-Object -First 5 | ForEach-Object { Write-Host `$_ }; exit 1 }"
 $linhas += @(
     "set ""UNICIVE_LAUNCHER=1""",
-    "powershell -NoProfile -ExecutionPolicy Bypass -STA -Command ""`$f = Join-Path `$env:TEMP 'instalador-assessor.ps1'; Invoke-WebRequest '$url' -OutFile `$f -UseBasicParsing; & `$f""",
+    "powershell -NoProfile -ExecutionPolicy Bypass -STA -Command ""$ps""",
     "if errorlevel 1 pause"
 )
 [System.IO.File]::WriteAllLines($Saida, [string[]]$linhas, [System.Text.Encoding]::ASCII)

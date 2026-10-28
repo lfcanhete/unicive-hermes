@@ -764,6 +764,8 @@ $timer.Add_Tick({
 
 $win.Add_Closing({ $sync.Cancelar = $true; $timer.Stop() })
 $win.Add_ContentRendered({
+    # O Instalar-Assessor.cmd confere esta marca: se ela nao existir, mostra o erro em vez de fechar calado.
+    $global:UniciveJanelaAbriu = $true
     # Aberto pelo Instalar-Assessor.cmd: minimiza a janela preta do PowerShell (esconder chama a atencao do antivirus).
     if ($env:UNICIVE_LAUNCHER) {
         try {
