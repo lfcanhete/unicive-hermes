@@ -14,10 +14,22 @@ $cfg = @{
     HermesHome = $HermesHome
     AppExe     = Join-Path $HermesHome "hermes-agent\apps\desktop\release\win-unpacked\Hermes.exe"
     Atalho     = Join-Path ([Environment]::GetFolderPath("Desktop")) "Hermes.lnk"
-    Google     = [bool]$env:UNICIVE_GOOGLE
-    GoogleB64  = $env:UNICIVE_GOOGLE
+    Google     = $false
+    GoogleJson = $null
     Demo       = [bool]$env:UNICIVE_DEMO
 }
+# Configuracao do Google: vem no comando (UNICIVE_GOOGLE, versoes antigas) ou e baixada do site do
+# treinamento. Assim o Instalar-Assessor.cmd fica pequeno e sem blocos codificados, que o antivirus
+# confunde com virus.
+if ($env:UNICIVE_GOOGLE) { try { $cfg.GoogleJson = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:UNICIVE_GOOGLE)) } catch {} }
+if (-not $cfg.GoogleJson -and -not $cfg.Demo) {
+    try {
+        $r = Invoke-WebRequest "https://lfcanhete.github.io/unicive-hermes/google-client.json" -UseBasicParsing -TimeoutSec 20
+        $cfg.GoogleJson = $(if ($r.Content -is [byte[]]) { [Text.Encoding]::UTF8.GetString($r.Content) } else { [string]$r.Content })
+    } catch {}
+}
+$cfg.Google = [bool]($cfg.GoogleJson -and $cfg.GoogleJson -match '"installed"')
+
 # Tudo o que aparece em "Ver detalhes" tambem vai para este arquivo, para o suporte.
 $LogArq = Join-Path $env:TEMP "instalador-assessor.log"
 function Registrar([string]$m) { try { [IO.File]::AppendAllText($LogArq, "$(Get-Date -Format 'HH:mm:ss') $m`r`n", [Text.Encoding]::UTF8) } catch {} }
@@ -306,7 +318,7 @@ $TarefaInstalar = {
 
     if ($cfg.Google) {
         Sub 4 "ativo"
-        $json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($cfg.GoogleB64))
+        $json = $cfg.GoogleJson
         if ($json -notmatch '"installed"') { throw "A configuração do Google deste instalador está incompleta." }
         if (-not $cfg.Demo) { [IO.File]::WriteAllText((Join-Path $HermesHome "google_client_secret.json"), $json, (New-Object Text.UTF8Encoding($false))) }
         Log "Instalando os componentes do Google..."
