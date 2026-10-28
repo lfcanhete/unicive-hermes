@@ -46,6 +46,14 @@ $Comum = {
         # O instalador oficial pode deixar so o hermes.cmd dentro da pasta do projeto.
         $hcmd = Join-Path $HermesHome "hermes-agent\.hermes\bin\hermes.cmd"
         if (Test-Path $hcmd) { return $hcmd }
+        # Ultimo recurso: procura em toda a pasta do Hermes (versoes diferentes do instalador oficial).
+        if (Test-Path $HermesHome) {
+            foreach ($nome in @("hermes.exe", "hermes.cmd")) {
+                $achado = Get-ChildItem $HermesHome -Recurse -Depth 4 -Filter $nome -ErrorAction SilentlyContinue |
+                    Where-Object { $_.FullName -notmatch '\\(node_modules|cache|installs|tools)\\' } | Select-Object -First 1
+                if ($achado) { return $achado.FullName }
+            }
+        }
         return $null
     }
 
@@ -112,13 +120,22 @@ $Comum = {
 $TarefaInstalar = {
     Sub 0 "ativo"
     $hx = AcharHermes
-    if (-not $hx) {
-        Log "Baixando o instalador oficial do Hermes..."
-        [void](Executar "powershell.exe" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "iex (irm https://hermes-agent.nousresearch.com/install.ps1)"))
-        $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
-        $hx = AcharHermes
+    for ($tentativa = 1; -not $hx -and $tentativa -le 2; $tentativa++) {
+        Log "Baixando o instalador oficial do Hermes$(if ($tentativa -gt 1) { ' (segunda tentativa)' })..."
+        [void](Executar "powershell.exe" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+            "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; iex (irm https://hermes-agent.nousresearch.com/install.ps1)"))
+        $saidaOficial = $script:saida
+        # O instalador oficial pode terminar partes em segundo plano: espera o Hermes aparecer por ate 1 minuto.
+        for ($i = 0; -not $hx -and $i -lt 12; $i++) {
+            $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
+            $hx = AcharHermes
+            if (-not $hx) { Start-Sleep 5 }
+        }
     }
-    if (-not $hx) { throw "O Hermes não foi encontrado depois da instalação." }
+    if (-not $hx) {
+        $fim = (($saidaOficial -split "`r?`n") | Where-Object { $_.Trim() } | Select-Object -Last 6) -join " | "
+        throw "O Hermes não foi encontrado depois da instalação. Última mensagem do instalador oficial: $fim"
+    }
     [void](Executar $hx @("--version"))
     if ($script:saida -notmatch "Hermes Agent v") {
         Log "Completando a instalação (reparo automático)..."
@@ -156,8 +173,13 @@ $TarefaInstalar = {
     if ($cfg.Demo -or (Test-Path $cfg.AppExe)) { Sub 1 "ok" } else { Log "O aplicativo não ficou pronto; o Assessor continua disponível pelo comando hermes."; Sub 1 "pulado" }
 
     Sub 2 "ativo"
-    [void](Executar $hx @("config", "set", "model.provider", "anthropic"))
-    [void](Executar $hx @("config", "set", "model.default", $cfg.Modelo))
+    # Sem o modelo configurado o Assessor nao funciona: tenta de novo e, se falhar, para com aviso.
+    foreach ($par in @(@("model.provider", "anthropic"), @("model.default", $cfg.Modelo))) {
+        if ((Executar $hx @("config", "set", $par[0], $par[1])) -ne 0) {
+            Start-Sleep 3
+            if ((Executar $hx @("config", "set", $par[0], $par[1])) -ne 0) { throw "Não consegui configurar o Claude no Hermes ($($par[0]))." }
+        }
+    }
     # Respostas mais rapidas e menos uso da cota do plano: raciocinio baixo e sem chamada extra para titulo.
     [void](Executar $hx @("config", "set", "--force", "agent.reasoning_effort", "low"))
     [void](Executar $hx @("config", "set", "auxiliary.title_generation.enabled", "false"))
@@ -173,7 +195,10 @@ $TarefaInstalar = {
         if ($json -notmatch '"installed"') { throw "A configuração do Google deste instalador está incompleta." }
         if (-not $cfg.Demo) { [IO.File]::WriteAllText((Join-Path $HermesHome "google_client_secret.json"), $json, (New-Object Text.UTF8Encoding($false))) }
         Log "Instalando os componentes do Google..."
-        [void](Executar $hx @("pm", "install", "--extra", "google"))
+        if ((Executar $hx @("pm", "install", "--extra", "google")) -ne 0) {
+            # Nao impede o login do Google; o proprio Hermes instala os componentes no primeiro uso.
+            Log "Aviso: os componentes do Google não terminaram de instalar agora; o Hermes completa no primeiro uso."
+        }
         Sub 3 "ok"
     }
 }
@@ -196,7 +221,9 @@ $TarefaClaude = {
             $l = $leitura.Result
             if ($null -eq $l) { break }
             Log $l; [void]$tudo.AppendLine($l)
-            if ($l -match '(https://claude\.ai/oauth/authorize\S+)') { $sync.ClaudeUrl = $Matches[1] }
+            # O link basta para mostrar a caixa do codigo (o resto do texto pode vir traduzido);
+            # um codigo colado cedo fica guardado na entrada ate o Hermes ler.
+            if ($l -match '(https://claude\.ai/oauth/authorize\S+)') { $sync.ClaudeUrl = $Matches[1]; $sync.ClaudeEsperando = $true }
             if ($l -match 'Paste it below') { $sync.ClaudeEsperando = $true }
             $leitura = $p.StandardOutput.ReadLineAsync()
         }
@@ -258,6 +285,7 @@ $TarefaGoogle = {
                     $corpo = [Text.Encoding]::UTF8.GetBytes($html)
                     $cab = [Text.Encoding]::ASCII.GetBytes("HTTP/1.1 200 OK`r`nContent-Type: text/html; charset=utf-8`r`nContent-Length: $($corpo.Length)`r`nConnection: close`r`n`r`n")
                     $fluxo.Write($cab, 0, $cab.Length); $fluxo.Write($corpo, 0, $corpo.Length); $fluxo.Flush()
+                    if (-not $ok -and $par.error -eq "access_denied") { throw "O acesso não foi permitido. Clique em Entrar com o Google, use a sua conta @unicive.edu.br e clique em Continuar/Permitir." }
                     if (-not $ok) { throw "O Google não autorizou ($($par.error))." }
                     $codigo = $par.code
                 } else {
@@ -294,19 +322,38 @@ $TarefaTelegram = {
     if ($cfg.Demo) { Start-Sleep 2; $sync.TgPronto = $true; Start-Sleep 4; $sync.TgNome = "Diretor"; return }
     $hx = AcharHermes
     $logGw = Join-Path $HermesHome "logs\gateway.log"
-    function Contar([string]$padrao) { if (Test-Path $logGw) { @(Select-String -Path $logGw -Pattern $padrao).Count } else { 0 } }
+    # So valem as linhas do log escritas depois deste momento (o log pode ser recomecado pelo Hermes).
+    $marco = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss", [Globalization.CultureInfo]::InvariantCulture)
+    function NoLog([string]$padrao) {
+        if (-not (Test-Path $logGw)) { return $false }
+        try {
+            $fs = [IO.File]::Open($logGw, "Open", "Read", "ReadWrite")
+            try { if ($fs.Length -gt 400000) { [void]$fs.Seek(-400000, "End") }; $texto = (New-Object IO.StreamReader($fs)).ReadToEnd() } finally { $fs.Close() }
+        } catch { return $false }
+        foreach ($l in ($texto -split "`r?`n")) {
+            if ($l.Length -ge 19 -and [string]::CompareOrdinal($l.Substring(0, 19), $marco) -ge 0 -and $l -match $padrao) { return $true }
+        }
+        return $false
+    }
     # Sem lista de usuarios autorizados, o Hermes responde ao primeiro oi com um codigo de pareamento.
     SalvarEnv @{ TELEGRAM_BOT_TOKEN = $sync.TgToken; TELEGRAM_ALLOWED_USERS = $null; TELEGRAM_HOME_CHANNEL = $null }
-    [void](Executar $hx @("pairing", "clear-pending"))
-    $conectados = Contar "telegram connected"; $recusados = Contar "InvalidToken|Unauthorized|token.*(invalid|rejected)"
+    # Pareamentos de uma instalacao anterior fariam o Hermes nao pedir codigo: comeca do zero.
+    [void](Executar $hx @("pairing", "list") -Quieto)
+    $aprovados = $false
+    foreach ($l in ($script:saida -split "`r?`n")) {
+        if ($l -match 'Approved Users') { $aprovados = $true; continue }
+        if ($aprovados -and $l -match '^\s*telegram\s+(\S+)') { [void](Executar $hx @("pairing", "revoke", "telegram", $Matches[1]) -Quieto) }
+    }
+    [void](Executar $hx @("pairing", "clear-pending") -Quieto)
     Log "Ligando o Assessor no Telegram (inicia junto com o Windows)..."
     [void](Executar $hx @("gateway", "install", "--if-missing", "--start-now", "--start-on-login"))
     [void](Executar $hx @("gateway", "restart"))
     $inicio = Get-Date
-    while ((Contar "telegram connected") -le $conectados) {
+    while (-not (NoLog "telegram connected")) {
         if ($sync.Cancelar) { throw "Cancelado." }
-        if ((Contar "InvalidToken|Unauthorized|token.*(invalid|rejected)") -gt $recusados) { throw "O Telegram não aceitou este token. Copie de novo a mensagem do BotFather." }
-        if (((Get-Date) - $inicio).TotalSeconds -gt 150) { throw "O Assessor não conseguiu se conectar ao Telegram." }
+        if (NoLog "(?i)telegram.*(conflict|terminated by other getUpdates)") { throw "Este robô já está ligado em outro computador. Cada computador precisa do seu próprio robô: crie outro no BotFather." }
+        if (NoLog "(?i)(InvalidToken|Unauthorized|No bot token|telegram.*(rejected|forbidden|non-retryable fatal))") { throw "O Telegram não aceitou este token. Copie de novo a mensagem do BotFather." }
+        if (((Get-Date) - $inicio).TotalSeconds -gt 150) { throw "O Assessor não conseguiu se conectar ao Telegram. Confira a internet e tente de novo." }
         Start-Sleep 2
     }
     $sync.TgPronto = $true
@@ -315,6 +362,7 @@ $TarefaTelegram = {
     while ($true) {
         if ($sync.Cancelar) { throw "Cancelado." }
         if (((Get-Date) - $inicio).TotalMinutes -gt 15) { throw "Não chegou nenhuma mensagem no robô." }
+        if (NoLog "(?i)telegram.*(conflict|terminated by other getUpdates)") { throw "Este robô já está ligado em outro computador. Cada computador precisa do seu próprio robô: crie outro no BotFather." }
         Start-Sleep 3
         [void](Executar $hx @("pairing", "list") -Quieto)
         $m = [regex]::Match($script:saida, '(?m)^\s*telegram\s+(\S+)\s+(\S+)\s+(.*?)\s+\d+m ago')
@@ -449,6 +497,7 @@ $TarefaTelegram = {
                   <TextBlock TextWrapping="Wrap" Text="1.  Clique em Entrar com o Google."/>
                   <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" Text="2.  Escolha a sua conta @unicive.edu.br."/>
                   <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" Text="3.  Marque as permissões e clique em Continuar. Depois é só voltar para esta janela."/>
+                  <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Foreground="#8A5A12" Text="Se o Google mostrar &quot;acesso bloqueado&quot; ou &quot;org_internal&quot;, você entrou com outra conta: clique em Abrir o navegador de novo e troque para a conta @unicive.edu.br."/>
                 </StackPanel>
               </Border>
               <Button x:Name="BtnGoogle" Style="{StaticResource Primario}" Content="Entrar com o Google" HorizontalAlignment="Left" Margin="0,16,0,0"/>
