@@ -2,7 +2,19 @@
 
 Assistente executiva da direção: briefing diário, resumo de e-mails, agenda, preparo de reuniões e rascunhos, com Google Workspace. Instala, configura e abre sozinha.
 
-## Para o diretor (Windows)
+## Instalador visual (recomendado)
+Uma janela guia o diretor em 6 passos: boas-vindas, instalação (sozinha), Claude (login no navegador; o código copiado é detectado sozinho), Google (login no navegador, sem colar nada), Telegram (robô próprio criado no BotFather; o instalador descobre o dono pela primeira mensagem e liga o gateway junto com o Windows) e pronto.
+
+1. Gere o arquivo que os diretores baixam:
+   ```powershell
+   .\gerar-instalador.ps1 -ClientSecret "C:\caminho\client_secret.json" -Saida "..\Treinamento-Hermes\Instalar-Pauta.cmd"
+   ```
+2. O diretor baixa o `Instalar-Pauta.cmd` e dá dois cliques. Ele baixa o `instalador.ps1` deste repositório e abre a janela.
+
+Com `-ClientSecret`, o `.cmd` carrega a configuração do Google: é de uso interno e não pode ir para este repositório nem para um site público.
+Para conferir as telas sem instalar nada: `$env:UNICIVE_DEMO=1; .\instalador.ps1`.
+
+## Para o diretor (Windows, modo texto)
 Cole no PowerShell e aperte Enter:
 
 ```powershell
