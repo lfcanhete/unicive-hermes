@@ -204,8 +204,47 @@ $TarefaInstalar = {
     foreach ($s in $cfg.Skills) { Pegar "skills\$(Split-Path $s -Leaf)\SKILL.md" (Join-Path $HermesHome "skills\$s\SKILL.md") }
     Sub 2 "ok"
 
+    # O Hermes se identifica para a Anthropic com a versao do Claude Code instalado; sem ele usa uma
+    # versao antiga fixa e a Anthropic recusa modelos novos ("Claude Code X does not support this model").
+    Sub 3 "ativo"
+    $binClaude = Join-Path $env:USERPROFILE ".local\bin"
+    $exeClaude = Join-Path $binClaude "claude.exe"
+    if ($cfg.Demo) { [void](Executar "claude" @("update")) }
+    else {
+        $achado = Get-Command claude -ErrorAction SilentlyContinue
+        if ($achado) { $exeClaude = $achado.Source }
+        if (Test-Path $exeClaude) {
+            Log "Atualizando o Claude Code..."
+            [void](Executar $exeClaude @("update"))
+        } else {
+            Log "Instalando o Claude Code (o Hermes usa a versão dele para acessar os modelos mais novos)..."
+            [void](Executar "powershell.exe" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; irm https://claude.ai/install.ps1 | iex"))
+        }
+        # O Hermes procura o claude no PATH: garante a pasta no PATH do usuario e neste processo.
+        if (Test-Path (Join-Path $binClaude "claude.exe")) {
+            $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+            if (-not (($userPath -split ';') -contains $binClaude)) { [Environment]::SetEnvironmentVariable("Path", ($userPath.TrimEnd(';') + ";" + $binClaude), "User") }
+            if (-not (($env:Path -split ';') -contains $binClaude)) { $env:Path += ";$binClaude" }
+            $exeClaude = Join-Path $binClaude "claude.exe"
+        }
+        if ((Test-Path $exeClaude) -and (Executar $exeClaude @("--version")) -eq 0) {
+            Log "Claude Code pronto: $($script:saida.Trim())"
+            # Mantem o Claude Code atualizado a cada login, sem abrir janela.
+            $inicializar = [Environment]::GetFolderPath("Startup")
+            $vbs = "CreateObject(""WScript.Shell"").Run """"""$exeClaude"""" update"", 0, False"
+            # Codificacao padrao do Windows: o .vbs le assim, e caminhos com acento continuam certos.
+            [IO.File]::WriteAllText((Join-Path $inicializar "Atualizar-Claude-Code.vbs"), $vbs, [Text.Encoding]::Default)
+            Sub 3 "ok"
+        } else {
+            Log "Aviso: o Claude Code não ficou instalado; o Hermes vai usar uma identificação antiga e pode não acessar os modelos mais novos."
+            Sub 3 "erro"
+        }
+    }
+    if ($cfg.Demo) { Sub 3 "ok" }
+
     if ($cfg.Google) {
-        Sub 3 "ativo"
+        Sub 4 "ativo"
         $json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($cfg.GoogleB64))
         if ($json -notmatch '"installed"') { throw "A configuração do Google deste instalador está incompleta." }
         if (-not $cfg.Demo) { [IO.File]::WriteAllText((Join-Path $HermesHome "google_client_secret.json"), $json, (New-Object Text.UTF8Encoding($false))) }
@@ -214,7 +253,7 @@ $TarefaInstalar = {
             # Nao impede o login do Google; o proprio Hermes instala os componentes no primeiro uso.
             Log "Aviso: os componentes do Google não terminaram de instalar agora; o Hermes completa no primeiro uso."
         }
-        Sub 3 "ok"
+        Sub 4 "ok"
     }
 }
 
@@ -610,12 +649,12 @@ for ($i = 0; $i -lt $nomesPassos.Count; $i++) {
     [void]$ListaPassos.Children.Add($it.Painel); Marcar $it "pendente"; $passos += $it
 }
 $subs = @()
-$nomesSubs = @("Baixar e instalar o Hermes", "Instalar o aplicativo Hermes", "Configurar o Claude Sonnet 5.5 e o Assessor", "Preparar a conexão com o Google")
+$nomesSubs = @("Baixar e instalar o Hermes", "Instalar o aplicativo Hermes", "Configurar o Claude Sonnet 5.5 e o Assessor", "Instalar o Claude Code (acesso aos modelos mais novos)", "Preparar a conexão com o Google")
 for ($i = 0; $i -lt $nomesSubs.Count; $i++) {
     $it = NovoItem $nomesSubs[$i] "$($i + 1)" $false
     [void]$ListaInstala.Children.Add($it.Painel); Marcar $it "pendente"; $subs += $it
 }
-if (-not $cfg.Google) { $subs[3].Texto.Text = "Google: não incluído neste instalador"; Marcar $subs[3] "pulado" }
+if (-not $cfg.Google) { $subs[4].Texto.Text = "Google: não incluído neste instalador"; Marcar $subs[4] "pulado" }
 
 # ---------- Tarefas em segundo plano ----------
 $script:tarefa = $null
