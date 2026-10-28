@@ -17,12 +17,17 @@ if ($ClientSecret) {
     $b64 = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes((Resolve-Path $ClientSecret)))
     $linhas += "set ""UNICIVE_GOOGLE=$b64"""
 }
-# Se o download falhar ou a janela nao abrir, a janela preta fica aberta explicando o motivo.
+# Baixa o instalador e grava com nome unico (um arquivo antigo preso ou apagado pelo antivirus nao
+# atrapalha). Se o Windows nao deixar gravar, explica que foi o antivirus. Erros ficam na tela.
 $ps = "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; " +
-      "`$f = Join-Path `$env:TEMP 'instalador-assessor.ps1'; " +
-      "try { Invoke-WebRequest '$url' -OutFile `$f -UseBasicParsing -ErrorAction Stop } " +
+      "try { `$s = (Invoke-WebRequest '$url' -UseBasicParsing -ErrorAction Stop).Content } " +
       "catch { Write-Host ''; Write-Host 'Nao consegui baixar o instalador do GitHub.' -ForegroundColor Red; Write-Host `$_.Exception.Message; " +
       "Write-Host 'A rede pode estar bloqueando o github.com. Tente em outra rede (por exemplo, o roteador do celular).'; exit 1 }; " +
+      "if (`$s -is [byte[]]) { `$s = [Text.Encoding]::UTF8.GetString(`$s) }; `$s = `$s.TrimStart([char]0xFEFF); " +
+      "`$f = Join-Path `$env:TEMP ('instalador-assessor-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.ps1'); " +
+      "`$gravou = `$true; try { [IO.File]::WriteAllText(`$f, `$s, (New-Object Text.UTF8Encoding(`$true))) } catch { `$gravou = `$false }; " +
+      "if (-not `$gravou) { Write-Host ''; Write-Host 'O Windows nao deixou salvar o instalador.' -ForegroundColor Red; " +
+      "Write-Host 'Normalmente e o antivirus (Bitdefender) bloqueando. Peca a TI para liberar o instalador do Assessor e tente de novo.'; exit 1 }; " +
       "& `$f; " +
       "if (-not `$global:UniciveJanelaAbriu) { Write-Host ''; Write-Host 'A janela do instalador nao abriu.' -ForegroundColor Red; " +
       "`$Error | Select-Object -First 5 | ForEach-Object { Write-Host `$_ }; exit 1 }"

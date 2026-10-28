@@ -281,11 +281,8 @@ $TarefaInstalar = {
         }
         if ((Test-Path $exeClaude) -and (Executar $exeClaude @("--version")) -eq 0) {
             Log "Claude Code pronto: $($script:saida.Trim())"
-            # Mantem o Claude Code atualizado a cada login, sem abrir janela.
-            $inicializar = [Environment]::GetFolderPath("Startup")
-            $vbs = "CreateObject(""WScript.Shell"").Run """"""$exeClaude"""" update"", 0, False"
-            # Codificacao padrao do Windows: o .vbs le assim, e caminhos com acento continuam certos.
-            [IO.File]::WriteAllText((Join-Path $inicializar "Atualizar-Claude-Code.vbs"), $vbs, [Text.Encoding]::Default)
+            # Um .vbs criado antes na inicializacao do Windows chamava a atencao do antivirus: remove.
+            Remove-Item (Join-Path ([Environment]::GetFolderPath("Startup")) "Atualizar-Claude-Code.vbs") -Force -ErrorAction SilentlyContinue
             Sub 3 "ok"
         } else {
             Log "Aviso: o Claude Code não ficou instalado; o Hermes vai usar uma identificação antiga e pode não acessar os modelos mais novos."
@@ -1020,13 +1017,6 @@ $win.Add_Closing({ $sync.Cancelar = $true; $timer.Stop() })
 $win.Add_ContentRendered({
     # O Instalar-Assessor.cmd confere esta marca: se ela nao existir, mostra o erro em vez de fechar calado.
     $global:UniciveJanelaAbriu = $true
-    # Aberto pelo Instalar-Assessor.cmd: minimiza a janela preta do PowerShell (esconder chama a atencao do antivirus).
-    if ($env:UNICIVE_LAUNCHER) {
-        try {
-            Add-Type -Name Janela -Namespace Unicive -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);'
-            [void][Unicive.Janela]::ShowWindow([Unicive.Janela]::GetConsoleWindow(), 6)
-        } catch {}
-    }
 })
 # Um erro inesperado nao fecha a janela: vira aviso e fica registrado no log.
 $win.Dispatcher.Add_UnhandledException({
