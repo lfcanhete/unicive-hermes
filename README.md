@@ -1,7 +1,7 @@
 # UniCIVE · Assessor (Hermes pré-configurado)
 
 Assessor executivo da direção: briefing diário, resumo de e-mails, agenda, preparo de reuniões e rascunhos, com Google Workspace. Instala, configura e abre sozinho.
-
+ 
 ## Instalador visual (recomendado)
 Uma janela guia o diretor em 6 passos: boas-vindas, instalação (sozinha), Claude (login no navegador; o código copiado é detectado sozinho), Google (login no navegador, sem colar nada), Telegram (robô próprio criado no BotFather; o instalador descobre o dono pela primeira mensagem e liga o gateway junto com o Windows) e pronto.
 
