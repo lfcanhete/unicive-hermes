@@ -430,9 +430,10 @@ details.plano-b p{margin-top:.6rem}
       <p><b>Google ou Telegram deram problema:</b> clique em <b>Pular por enquanto</b> e termine a instalação. Dá para conectar depois, rodando o instalador de novo.</p>
       <p><b>O login do Claude não funcionou:</b> confira se você entrou com a conta certa e clique em <b>Entrar com o Claude</b> de novo.</p>
       <p><b>O app pede para esperar uma atualização:</b> feche o Hermes, espere um minuto e abra de novo. Se continuar, clique em “Check again”.</p>
-      <details class="plano-b"><summary>Prefere instalar pelo PowerShell?</summary>
-        <p>O instalador em modo texto, sem a janela e sem o Google (o Google pode ser conectado depois, rodando o instalador da janela). Abra o <b>Windows PowerShell</b>, cole o comando e aperte Enter.</p>
-        <div class="comando"><code id="cmd-install">iex (irm https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main/install.ps1)</code><button class="btn btn-ouro" id="cmd-copiar" style="padding:.55rem 1.1rem">Copiar comando</button><span class="copiar-ok" id="cmd-ok">Copiado ✓</span></div>
+      <details class="plano-b" open><summary>O Windows bloqueou o arquivo ou ele não abre?</summary>
+        <p>Acontece em redes que bloqueiam o SmartScreen da Microsoft. Instale pelo PowerShell: é o mesmo instalador com janela, já com o Google, só que baixado sem passar pelo navegador.</p>
+        <p><b>1.</b> Clique no menu Iniciar, digite <b>PowerShell</b> e abra o <b>Windows PowerShell</b>. <b>2.</b> Copie o comando, cole no PowerShell (botão direito do mouse) e aperte Enter.</p>
+        <div class="comando"><code id="cmd-install">[Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://lfcanhete.github.io/unicive-hermes/Instalar-Assessor.cmd -OutFile $env:TEMP\Instalar-Assessor.cmd; &amp; $env:TEMP\Instalar-Assessor.cmd</code><button class="btn btn-ouro" id="cmd-copiar" style="padding:.55rem 1.1rem">Copiar comando</button><span class="copiar-ok" id="cmd-ok">Copiado ✓</span></div>
       </details>
     </div>
   </div>
