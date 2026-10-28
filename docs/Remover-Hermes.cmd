@@ -26,6 +26,7 @@ echo   [2/4] Tirando o Hermes da inicializacao do Windows e os atalhos...
 if not defined UNICIVE_TESTE (
     del /q "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Hermes_Gateway*" >nul 2>&1
     del /q "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Atualizar-Claude-Code.vbs" >nul 2>&1
+    del /q "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Assessor-Telegram.cmd" >nul 2>&1
     del /q "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Hermes.lnk" >nul 2>&1
     del /q "%USERPROFILE%\Desktop\Hermes.lnk" >nul 2>&1
     if defined OneDrive del /q "%OneDrive%\Desktop\Hermes.lnk" >nul 2>&1

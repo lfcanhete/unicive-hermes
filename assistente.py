@@ -428,6 +428,30 @@ def log_gateway_desde(marco, padrao):
     return any(l[:19] >= marco and re.search(padrao, l) for l in texto.splitlines() if len(l) >= 19)
 
 
+INICIAR_TELEGRAM = r"""@echo off
+rem UNICIVE - liga o Assessor no Telegram ao entrar no Windows (criado pelo instalador do Assessor).
+rem O Hermes grava um .vbs na inicializacao para isso, mas o antivirus costuma remover; este e o reserva.
+if not "%~1"=="min" (start "" /min "%~f0" min & exit /b)
+rem Espera o login assentar e o .vbs do Hermes (se existir) ligar primeiro; "start" nao duplica.
+ping -n 31 127.0.0.1 >nul
+set "HERMES_NONINTERACTIVE=1"
+set "HERMES_GATEWAY_INSTALL_START_ON_LOGIN=0"
+if exist "%LOCALAPPDATA%\hermes\bin\hermes.exe" "%LOCALAPPDATA%\hermes\bin\hermes.exe" gateway start >nul 2>&1
+exit /b
+"""
+
+
+def ligar_no_login():
+    """Garante que o Telegram volta sozinho depois de reiniciar o computador."""
+    pasta = os.path.join(os.environ["APPDATA"], "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
+    try:
+        with open(os.path.join(pasta, "Assessor-Telegram.cmd"), "w", encoding="ascii", newline="\r\n") as f:
+            f.write(INICIAR_TELEGRAM)
+        log("Telegram: o Assessor liga sozinho ao entrar no Windows.")
+    except OSError as e:
+        log(f"Aviso: não consegui deixar o Telegram ligando com o Windows ({e}).")
+
+
 def telegram_ja_configurado():
     hx = achar_hermes()
     if not hx or not ler_env("TELEGRAM_BOT_TOKEN"):
@@ -441,6 +465,7 @@ def telegram_ja_configurado():
         executar([hx, "gateway", "restart"])
     else:
         log("Telegram: o Assessor está ligado.")
+    ligar_no_login()
     return True
 
 
@@ -525,6 +550,7 @@ def tarefa_telegram(token):
             executar([hx, "send", "-t", f"telegram:{uid}", f"Olá{primeiro}! Aqui é o Assessor, assistente da direção do UNICIVE. "
                       "Pronto: a partir de agora você pode falar comigo por aqui."])
             fase("boasvindas", "ok")
+            ligar_no_login()
             return
 
 
