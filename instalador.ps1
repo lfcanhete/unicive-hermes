@@ -18,6 +18,11 @@ $cfg = @{
     GoogleB64  = $env:UNICIVE_GOOGLE
     Demo       = [bool]$env:UNICIVE_DEMO
 }
+# Tudo o que aparece em "Ver detalhes" tambem vai para este arquivo, para o suporte.
+$LogArq = Join-Path $env:TEMP "instalador-assessor.log"
+function Registrar([string]$m) { try { [IO.File]::AppendAllText($LogArq, "$(Get-Date -Format 'HH:mm:ss') $m`r`n", [Text.Encoding]::UTF8) } catch {} }
+Registrar "=== Instalador do Assessor aberto ($([Environment]::OSVersion.VersionString), PowerShell $($PSVersionTable.PSVersion)) ==="
+
 $sync = [hashtable]::Synchronized(@{
     Log = [System.Collections.Concurrent.ConcurrentQueue[string]]::new()
     Sub = [System.Collections.Concurrent.ConcurrentQueue[string]]::new()
@@ -285,7 +290,7 @@ $TarefaGoogle = {
 }
 
 $TarefaVerificarBot = {
-    if ($cfg.Demo) { Start-Sleep 1; $sync.TgBot = "pauta_direcao_bot"; return }
+    if ($cfg.Demo) { Start-Sleep 1; $sync.TgBot = "assessor_direcao_bot"; return }
     try { $r = Invoke-RestMethod "https://api.telegram.org/bot$($sync.TgToken)/getMe" -UseBasicParsing }
     catch { throw "O Telegram não reconheceu este token. Copie de novo a mensagem do BotFather." }
     $sync.TgBot = $r.result.username
@@ -417,12 +422,12 @@ $TarefaTelegram = {
                 <StackPanel>
                   <TextBlock TextWrapping="Wrap" Text="1.  Clique em Entrar com o Claude. O navegador vai abrir."/>
                   <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" Text="2.  Entre na sua conta e clique em Authorize (Autorizar)."/>
-                  <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" Text="3.  Vai aparecer um código. Clique em Copy (Copiar): o instalador percebe sozinho."/>
+                  <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" Text="3.  Vai aparecer um código. Clique em Copy (Copiar), volte aqui e cole no campo abaixo (Ctrl+V)."/>
                 </StackPanel>
               </Border>
               <Button x:Name="BtnClaude" Style="{StaticResource Primario}" Content="Entrar com o Claude" HorizontalAlignment="Left" Margin="0,16,0,0"/>
               <StackPanel x:Name="CaixaCodigo" Margin="0,16,0,0" Visibility="Collapsed">
-                <TextBlock Text="Se ele não perceber, cole o código aqui:" Margin="0,0,0,6"/>
+                <TextBlock Text="Cole o código aqui (Ctrl+V):" Margin="0,0,0,6"/>
                 <StackPanel Orientation="Horizontal">
                   <TextBox x:Name="TxtCodigo" Width="380" Style="{StaticResource Campo}"/>
                   <Button x:Name="BtnCodigo" Style="{StaticResource Secundario}" Content="Confirmar" Margin="10,0,0,0"/>
@@ -447,7 +452,7 @@ $TarefaTelegram = {
               <Border Style="{StaticResource Cartao}">
                 <StackPanel>
                   <TextBlock FontWeight="SemiBold" Text="1.  Crie o seu robô"/>
-                  <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" Text="No BotFather, envie /newbot. Dê um nome (ex.: Assessor Marcela) e depois um usuário que termine em bot (ex.: pauta_marcela_bot). Ele responde com um token: copie a linha com o token."/>
+                  <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" Text="No BotFather, envie /newbot. Dê um nome (ex.: Assessor Marcela) e depois um usuário que termine em bot (ex.: assessor_marcela_bot). Ele responde com um token: copie e cole no passo 2 (Ctrl+V)."/>
                   <Button x:Name="BtnBotFather" Style="{StaticResource Secundario}" Content="Abrir o BotFather" HorizontalAlignment="Left" Margin="0,10,0,0" Padding="18,7"/>
                 </StackPanel>
               </Border>
@@ -557,6 +562,7 @@ function Rodar([scriptblock]$Bloco, [scriptblock]$AoTerminar) {
 
 function Status($controle, [string]$texto, [string]$tipo) {
     $controle.Text = $texto
+    Registrar "[tela] $texto"
     $controle.Foreground = Cor $(switch ($tipo) { "ok" { "#2F7A4E" } "erro" { "#B0472F" } default { "#006652" } })
 }
 
@@ -564,6 +570,7 @@ function Status($controle, [string]$texto, [string]$tipo) {
 $script:pagina = 0
 $script:feito = @{}
 function IrPara([int]$i) {
+    Registrar "[passo] $($i + 1): $($nomesPassos[$i])"
     for ($k = 0; $k -le 5; $k++) { (Get-Variable "P$k" -ValueOnly).Visibility = "Collapsed" }
     (Get-Variable "P$i" -ValueOnly).Visibility = "Visible"
     if ($passos[$script:pagina].Estado -eq "ativo") { Marcar $passos[$script:pagina] "pendente" }
@@ -608,7 +615,7 @@ function IniciarInstalacao {
         if ($sync.Erro) {
             foreach ($s in $subs) { if ($s.Estado -eq "ativo") { Marcar $s "erro" } }
             $Barra.Visibility = "Collapsed"
-            $TxtErroInstala.Text = "Algo deu errado: $($sync.Erro)`nClique em Tentar de novo. Se continuar, abra Ver detalhes, tire uma foto da tela e envie para o suporte."
+            $TxtErroInstala.Text = "Algo deu errado: $($sync.Erro)`nClique em Tentar de novo. Se continuar, envie para o suporte o arquivo $LogArq"
             $TxtErroInstala.Visibility = "Visible"
             Marcar $passos[1] "erro"; $script:erroInstala = $true
             $BtnAvancar.Content = "Tentar de novo"; $BtnAvancar.IsEnabled = $true
@@ -702,6 +709,15 @@ function VerificarToken {
     }
 }
 $BtnToken.Add_Click({ VerificarToken })
+# Colou no campo: confere sozinho, sem o diretor precisar clicar.
+$TxtToken.Add_TextChanged({
+    $t = [regex]::Match($TxtToken.Text, '\d{5,15}:[\w-]{30,}').Value
+    if ($t -and $t -ne $sync.TgToken -and -not $script:tarefa) { if ($TxtToken.Text -ne $t) { $TxtToken.Text = $t }; VerificarToken }
+})
+$TxtCodigo.Add_TextChanged({
+    $c = $TxtCodigo.Text.Trim()
+    if ($sync.ClaudeEsperando -and $c -match '^[\w-]{10,}#[\w-]{10,}$' -and -not $sync.ClaudeCodigo) { $sync.ClaudeCodigo = $c; Status $TxtClaude "Código recebido. Conferindo..." "" }
+})
 
 $BtnAbrir.Add_Click({
     if ($cfg.Demo) { $TxtFinal.Text = "[demo] abriria o Hermes Desktop."; return }
@@ -719,7 +735,7 @@ $timer.Interval = [TimeSpan]::FromMilliseconds(150)
 $timer.Add_Tick({
     $m = $null
     while ($sync.Log.TryDequeue([ref]$m)) {
-        $TxtLog.AppendText($m + "`r`n"); $TxtLog.ScrollToEnd()
+        $TxtLog.AppendText($m + "`r`n"); $TxtLog.ScrollToEnd(); Registrar $m
         # A barra de status mostra a ultima linha do que esta acontecendo, sem os enfeites do terminal.
         $limpa = ($m -replace '[^\p{L}\p{N}\p{P}\p{Zs}]', '').Trim()
         if ($script:tarefa -and $limpa.Length -gt 3) { $TxtStatus.Text = $limpa }
@@ -734,25 +750,8 @@ $timer.Add_Tick({
     $pct = [int][Math]::Floor(($feitos + $fracao) / $passos.Count * 100)
     if ($BarraGeral.Value -ne $pct) { $BarraGeral.Value = $pct; $TxtPct.Text = "$pct%" }
 
-    if ($sync.ClaudeEsperando -and $script:pagina -eq 2) {
-        if ($CaixaCodigo.Visibility -ne "Visible") { $CaixaCodigo.Visibility = "Visible"; Status $TxtClaude "Aguardando o código do Claude..." "" }
-        try {
-            if ([Windows.Clipboard]::ContainsText()) {
-                $c = [Windows.Clipboard]::GetText().Trim()
-                if ($c -match '^[\w-]{10,}#[\w-]{10,}$' -and $c -ne $script:ultimoCodigo) {
-                    $script:ultimoCodigo = $c; $TxtCodigo.Text = $c; $sync.ClaudeCodigo = $c
-                    Status $TxtClaude "Código recebido. Conferindo..." ""
-                }
-            }
-        } catch {}
-    }
-    if ($script:pagina -eq 4 -and -not $sync.TgToken -and -not $script:tarefa) {
-        try {
-            if ([Windows.Clipboard]::ContainsText()) {
-                $c = [regex]::Match([Windows.Clipboard]::GetText(), '\d{5,15}:[\w-]{30,}').Value
-                if ($c -and $c -ne $script:ultimoToken) { $script:ultimoToken = $c; $TxtToken.Text = $c; VerificarToken }
-            }
-        } catch {}
+    if ($sync.ClaudeEsperando -and $script:pagina -eq 2 -and $CaixaCodigo.Visibility -ne "Visible") {
+        $CaixaCodigo.Visibility = "Visible"; Status $TxtClaude "Aguardando o código do Claude..." ""; [void]$TxtCodigo.Focus()
     }
 
     if ($script:tarefa -and $script:tarefa.H.IsCompleted) {
@@ -765,13 +764,20 @@ $timer.Add_Tick({
 
 $win.Add_Closing({ $sync.Cancelar = $true; $timer.Stop() })
 $win.Add_ContentRendered({
-    # Aberto pelo Instalar-Assessor.cmd: esconde a janela preta do PowerShell.
+    # Aberto pelo Instalar-Assessor.cmd: minimiza a janela preta do PowerShell (esconder chama a atencao do antivirus).
     if ($env:UNICIVE_LAUNCHER) {
         try {
             Add-Type -Name Janela -Namespace Unicive -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);'
-            [void][Unicive.Janela]::ShowWindow([Unicive.Janela]::GetConsoleWindow(), 0)
+            [void][Unicive.Janela]::ShowWindow([Unicive.Janela]::GetConsoleWindow(), 6)
         } catch {}
     }
+})
+# Um erro inesperado nao fecha a janela: vira aviso e fica registrado no log.
+$win.Dispatcher.Add_UnhandledException({
+    param($origem, $e)
+    $e.Handled = $true
+    Registrar ("ERRO INESPERADO: " + $e.Exception.ToString())
+    [void][Windows.MessageBox]::Show("Algo inesperado aconteceu, mas a instalação continua aberta.`n`nSe algo não funcionar, envie para o suporte o arquivo:`n$LogArq", "Instalar o Assessor")
 })
 
 if ($cfg.Demo) { $win.Title += "  [demonstração]" }
