@@ -554,10 +554,128 @@ def tarefa_telegram(token):
             return
 
 
+# ---------- Passo 6: checkup completo ----------
+def executar_com_limite(args, segundos):
+    """Roda um comando com tempo maximo; devolve (codigo, texto) ou (None, '') se estourar."""
+    try:
+        r = subprocess.run(args, stdin=subprocess.DEVNULL, capture_output=True, env=ambiente(), creationflags=SEM_JANELA,
+                           text=True, encoding="utf-8", errors="replace", timeout=segundos)
+        return r.returncode, (r.stdout or "") + (r.stderr or "")
+    except subprocess.TimeoutExpired:
+        return None, ""
+    except OSError as e:
+        return 1, str(e)
+
+
+def google_funcionando():
+    """Renova o acesso com o token salvo e abre o Gmail: prova que o Google esta mesmo conectado."""
+    with open(os.path.join(HOME, "google_token.json"), encoding="utf-8") as f:
+        tok = json.load(f)
+    corpo = urllib.parse.urlencode({"client_id": tok["client_id"], "client_secret": tok["client_secret"],
+                                    "refresh_token": tok["refresh_token"], "grant_type": "refresh_token"}).encode()
+    with urllib.request.urlopen(urllib.request.Request("https://oauth2.googleapis.com/token", data=corpo), timeout=30) as r:
+        acesso = json.load(r)["access_token"]
+    req = urllib.request.Request("https://gmail.googleapis.com/gmail/v1/users/me/profile", headers={"Authorization": "Bearer " + acesso})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.load(r).get("emailAddress", "")
+
+
+def tarefa_checkup(item):
+    """Testa de verdade cada parte. item(chave, situacao, texto) atualiza a lista na janela."""
+    problemas = 0
+    hx = achar_hermes()
+
+    item("hermes", "ativo", "Hermes: conferindo...")
+    rc, out = executar_com_limite([hx, "--version"], 60) if hx else (1, "")
+    if rc == 0 and "Hermes Agent v" in out:
+        versao = out.splitlines()[0].split("(")[0].replace("Hermes Agent", "").strip()
+        item("hermes", "ok", f"Hermes funcionando ({versao})")
+    else:
+        item("hermes", "erro", "Hermes não está respondendo")
+        problemas += 1
+        hx = None
+
+    item("modelo", "ativo", "Modelo: conferindo...")
+    rc, out = executar_com_limite([hx, "config", "get", "model.default"], 60) if hx else (1, "")
+    if rc == 0 and MODELO in out:
+        item("modelo", "ok", "Modelo Claude Sonnet 5.5 configurado")
+    else:
+        item("modelo", "erro", "O modelo não está configurado como Claude Sonnet 5.5")
+        problemas += 1
+
+    item("claude", "ativo", "Claude: fazendo uma pergunta de teste (até 2 minutos)...")
+    rc, out = executar_com_limite([hx, "-z", "Responda apenas com a palavra OK."], 150) if hx else (1, "")
+    if rc == 0 and re.search(r"\bOK\b", out, re.I):
+        item("claude", "ok", "Claude respondeu ao teste")
+    else:
+        if "does not support this model" in out:
+            motivo = "o Claude Code está desatualizado"
+        elif re.search(r"rate.?limit|usage limit|429", out, re.I):
+            motivo = "o limite de uso do plano foi atingido; tente mais tarde"
+        elif re.search(r"auth|credential|login|401", out, re.I):
+            motivo = "o login do Claude não está valendo"
+        else:
+            motivo = "não respondeu a tempo" if rc is None else "não respondeu"
+        item("claude", "erro", f"Claude não respondeu ao teste: {motivo}")
+        log("Teste do Claude: " + out[-600:])
+        problemas += 1
+
+    soul = os.path.join(HOME, "SOUL.md")
+    skills_ok = all(os.path.isfile(os.path.join(HOME, "skills", "productivity", s, "SKILL.md")) for s in SKILLS)
+    try:
+        soul_ok = "Assessor" in open(soul, encoding="utf-8", errors="replace").read()
+    except OSError:
+        soul_ok = False
+    if soul_ok and skills_ok:
+        item("assessor", "ok", "Personalidade e skills do Assessor instaladas")
+    else:
+        item("assessor", "erro", "Personalidade ou skills do Assessor faltando")
+        problemas += 1
+
+    cl = achar_claude()
+    if cl and executar_com_limite([cl, "--version"], 30)[0] == 0:
+        item("claudecode", "ok", "Claude Code encontrado")
+    else:
+        item("claudecode", "erro", "Claude Code não encontrado (pode impedir os modelos mais novos)")
+        problemas += 1
+
+    if os.path.isfile(os.path.join(HOME, "google_token.json")):
+        item("google", "ativo", "Google: abrindo o Gmail...")
+        try:
+            email = google_funcionando()
+            item("google", "ok", f"Google funcionando{': ' + email if email else ''}")
+        except Exception as e:
+            item("google", "erro", "Google conectado, mas o Gmail não abriu: entre no Google de novo")
+            log(f"Teste do Google: {e}")
+            problemas += 1
+    else:
+        item("google", "pulado", "Google: não conectado")
+
+    if ler_env("TELEGRAM_BOT_TOKEN"):
+        item("telegram", "ativo", "Telegram: conferindo...")
+        ligado = bool(hx) and not re.search(r"(?i)not running", executar_com_limite([hx, "gateway", "status"], 60)[1])
+        aprovado = bool(hx) and dono_aprovado(hx)
+        if ligado and aprovado:
+            item("telegram", "ok", "Telegram ligado e com o dono aprovado")
+        else:
+            item("telegram", "erro", "Telegram: " + ("o Assessor está desligado" if not ligado else "o dono ainda não foi aprovado"))
+            problemas += 1
+        inicio = os.path.join(os.environ["APPDATA"], "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
+        if os.path.isfile(os.path.join(inicio, "Assessor-Telegram.cmd")) or os.path.isfile(os.path.join(inicio, "Hermes_Gateway.vbs")):
+            item("inicio", "ok", "Telegram liga sozinho ao entrar no Windows")
+        else:
+            item("inicio", "erro", "O Telegram não vai ligar sozinho depois de reiniciar")
+            problemas += 1
+    else:
+        item("telegram", "pulado", "Telegram: não conectado")
+        item("inicio", "pulado", "Início automático do Telegram: não se aplica")
+    return problemas
+
+
 # ---------- Janela ----------
 PASSOS = ["Boas-vindas", "Verificação", "Claude", "Google", "Telegram", "Pronto"]
 TITULOS = ["Vamos deixar o Assessor pronto", "Verificando e ajustando", "Conecte o Claude", "Conecte o Google",
-           "Conecte o Telegram", "Tudo pronto!"]
+           "Conecte o Telegram", "Checkup final"]
 STATUS = ["Pronto para começar", "Verificando... pode levar alguns minutos", "Aguardando o login do Claude",
           "Aguardando o login do Google", "Aguardando o Telegram", "Instalação concluída"]
 SUBS = ["Hermes", "Aplicativo Hermes", "Claude Sonnet 5.5 e o Assessor", "Claude Code (acesso aos modelos mais novos)",
@@ -805,11 +923,22 @@ class Janela:
         self.tg_mostrar(0)
 
         p = self.paginas[5]
-        texto(p, "O Assessor está instalado e configurado. Na primeira conversa ele se apresenta e pergunta as suas preferências.",
-              font=("Segoe UI", 12))
+        texto(p, "Checkup final: o instalador testa de verdade cada parte do Assessor.", font=("Segoe UI", 12))
         self.resumo = tk.Frame(p, bg=PAPEL)
-        self.resumo.pack(fill="x", pady=(16, 0))
-        botao(p, "Abrir o Assessor", self.abrir_assessor).pack(anchor="w", pady=(18, 0))
+        self.resumo.pack(fill="x", pady=(12, 0))
+        self.ck = {}
+        for chave, rotulo in (("hermes", "Hermes"), ("modelo", "Modelo"), ("claude", "Claude"), ("assessor", "Assessor"),
+                              ("claudecode", "Claude Code"), ("google", "Google"), ("telegram", "Telegram"),
+                              ("inicio", "Início automático do Telegram")):
+            m = Marcador(self.resumo, rotulo, "•", False)
+            m.quadro.pack_configure(pady=(0, 7))
+            self.ck[chave] = m
+        self.ck_resumo = texto(p, "", font=("Segoe UI", 11, "bold"))
+        acoes = tk.Frame(p, bg=PAPEL)
+        acoes.pack(anchor="w", pady=(12, 0))
+        botao(acoes, "Abrir o Assessor", self.abrir_assessor).pack(side="left")
+        self.btn_checkup = botao(acoes, "Refazer o checkup", self.montar_resumo, primario=False)
+        self.btn_checkup.pack(side="left", padx=(10, 0))
         self.final = texto(p, "", fg=VERDE_MEIO)
 
     # ----- navegacao -----
@@ -1111,17 +1240,38 @@ class Janela:
         webbrowser.open(f"https://t.me/{robo}" if robo else "https://web.telegram.org/")
 
     def montar_resumo(self):
-        for w in self.resumo.winfo_children():
-            w.destroy()
-        email, robo = estado.get("google_email"), estado.get("tg_robo")
-        itens = [("Hermes e Assessor prontos", "ok"),
-                 ("Claude conectado (Sonnet 5.5)", self.feito.get(2)),
-                 (f"Google conectado{': ' + email if email else ''}" if self.feito.get(3) == "ok" else "Google: fica para depois", self.feito.get(3)),
-                 (f"Telegram conectado{': @' + robo if robo else ''}" if self.feito.get(4) == "ok" else "Telegram: fica para depois", self.feito.get(4))]
-        for t, situacao in itens:
-            Marcador(self.resumo, t, "•", False).marcar("ok" if situacao == "ok" else "pulado")
-        self.final.config(text=("Fale com o Assessor pelo seu robô no Telegram ou pelo aplicativo Hermes." if self.feito.get(4) == "ok"
-                                else "Nas próximas vezes, abra pelo aplicativo Hermes."))
+        """Roda o checkup completo e mostra cada item com o resultado."""
+        if self.tarefa and self.tarefa.is_alive():
+            self.raiz.after(500, self.montar_resumo)
+            return
+        for m in self.ck.values():
+            m.marcar("pendente")
+        self.btn_checkup.config(state="disabled")
+        self.ck_resumo.config(text="Testando... (o teste do Claude pode levar até 2 minutos)", fg=VERDE_MEIO)
+        self.final.config(text="")
+
+        def item(chave, situacao, rotulo):
+            def aplicar():
+                self.ck[chave].marcar(situacao)
+                self.ck[chave].texto.config(text=rotulo)
+            na_tela(aplicar)
+
+        def fim(problemas, erro):
+            self.btn_checkup.config(state="normal")
+            if self.pagina == 5:
+                self.titulo.config(text="Tudo pronto!" if not erro and not problemas else "Quase pronto")
+            if erro:
+                self.ck_resumo.config(text=f"O checkup não terminou: {erro}", fg=ERRO)
+            elif problemas:
+                self.ck_resumo.config(text=f"Atenção: {problemas} item(ns) com problema. Abra o Instalar-Assessor de novo para "
+                                           "ajustar; se continuar, use o Remover-Hermes e instale do zero.", fg=ERRO)
+            else:
+                self.ck_resumo.config(text="✓  Tudo funcionando. O Assessor está pronto para usar.", fg=OK)
+                self.final.config(text=("Fale com o Assessor pelo seu robô no Telegram ou pelo aplicativo Hermes. Na primeira "
+                                        "conversa ele se apresenta e pergunta as suas preferências."))
+            registrar(f"[checkup] problemas: {problemas if not erro else erro}")
+
+        self.rodar(tarefa_checkup, fim, item)
 
     def abrir_assessor(self):
         if os.path.isfile(APP):
