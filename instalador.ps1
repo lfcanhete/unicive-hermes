@@ -211,7 +211,9 @@ $TarefaInstalar = {
         $pasta = Split-Path $hx
         $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
         if (-not (($userPath -split ';') -contains $pasta)) {
-            [Environment]::SetEnvironmentVariable("Path", ($userPath.TrimEnd(';') + ";" + $pasta), "User")
+            # Alguns computadores nao deixam mudar o PATH (regra da TI ou antivirus): e so conveniencia.
+            try { [Environment]::SetEnvironmentVariable("Path", ($userPath.TrimEnd(';') + ";" + $pasta), "User") }
+            catch { Log "Aviso: este computador não deixou mudar o PATH; o Hermes continua funcionando pelo atalho." }
         }
     }
     Sub 0 "ok"
@@ -274,10 +276,21 @@ $TarefaInstalar = {
         }
         # O Hermes procura o claude no PATH: garante a pasta no PATH do usuario e neste processo.
         if (Test-Path (Join-Path $binClaude "claude.exe")) {
-            $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-            if (-not (($userPath -split ';') -contains $binClaude)) { [Environment]::SetEnvironmentVariable("Path", ($userPath.TrimEnd(';') + ";" + $binClaude), "User") }
-            if (-not (($env:Path -split ';') -contains $binClaude)) { $env:Path += ";$binClaude" }
             $exeClaude = Join-Path $binClaude "claude.exe"
+            if (-not (($env:Path -split ';') -contains $binClaude)) { $env:Path += ";$binClaude" }
+            $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+            if (-not (($userPath -split ';') -contains $binClaude)) {
+                try { [Environment]::SetEnvironmentVariable("Path", ($userPath.TrimEnd(';') + ";" + $binClaude), "User") }
+                catch {
+                    # Sem poder mudar o PATH: um claude.cmd na pasta WindowsApps (ja faz parte do PATH de
+                    # todo Windows) chama o Claude Code de verdade, sempre na versao atual.
+                    $apps = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps"
+                    try {
+                        [IO.File]::WriteAllText((Join-Path $apps "claude.cmd"), "@`"$exeClaude`" %*`r`n", [Text.Encoding]::Default)
+                        Log "Este computador não deixou mudar o PATH; o Claude Code foi ligado pela pasta WindowsApps."
+                    } catch { Log "Aviso: não consegui deixar o Claude Code visível para o Hermes ($($_.Exception.Message))." }
+                }
+            }
         }
         if ((Test-Path $exeClaude) -and (Executar $exeClaude @("--version")) -eq 0) {
             Log "Claude Code pronto: $($script:saida.Trim())"
