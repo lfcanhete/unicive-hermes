@@ -19,15 +19,30 @@ call :limpar
 echo   [2/3] Instalando o Hermes oficial (Nous Research).
 echo         Uma janela de instalacao vai abrir: siga ate o fim. Depois esta janela continua sozinha.
 curl -fsSL -o "%TEMP%\Hermes-Setup.exe" "https://hermes-assets.nousresearch.com/Hermes-Setup.exe" || goto erro_rede
-start "" /wait "%TEMP%\Hermes-Setup.exe"
+rem Acompanha o registro do instalador oficial: se ele falhar ("bootstrap FAILED", por exemplo o antivirus
+rem bloqueando o script que ele baixa), fecha a janela de erro sozinho e segue para o plano B na hora.
+set "LG=%HH%\logs\bootstrap-installer.log"
+start "" "%TEMP%\Hermes-Setup.exe"
 echo         Aguardando o Hermes terminar de instalar...
 set /a N=0
 :esperar
-if exist "%HH%\bin\hermes.exe" goto assistente
-set /a N+=1
-if %N% gtr 6 goto plano_b
 ping -n 6 127.0.0.1 >nul
+if exist "%LG%" findstr /c:"bootstrap FAILED" "%LG%" >nul 2>&1 && goto plano_b
+if exist "%LG%" findstr /c:"bootstrap complete" "%LG%" >nul 2>&1 && if exist "%HH%\bin\hermes.exe" goto assistente
+tasklist /fi "imagename eq Hermes-Setup.exe" 2>nul | find /i "Hermes-Setup.exe" >nul || goto setup_fechou
+set /a N+=1
+if %N% gtr 240 goto plano_b
 goto esperar
+:setup_fechou
+rem A janela do instalador fechou: espera ate 2 min pelo resultado no registro antes de decidir.
+set /a M=0
+:esperar_fim
+if exist "%LG%" findstr /c:"bootstrap FAILED" "%LG%" >nul 2>&1 && goto plano_b
+if exist "%LG%" findstr /c:"bootstrap complete" "%LG%" >nul 2>&1 && if exist "%HH%\bin\hermes.exe" goto assistente
+set /a M+=1
+if %M% gtr 24 (if exist "%HH%\bin\hermes.exe" (goto assistente) else (goto plano_b))
+ping -n 6 127.0.0.1 >nul
+goto esperar_fim
 
 :plano_b
 rem O instalador com janela grava um script que o antivirus pode bloquear ("Install didn't finish").
@@ -35,6 +50,7 @@ rem O instalador oficial pelo PowerShell roda direto da internet, sem gravar ess
 echo.
 echo         O instalador com janela nao terminou. Limpando o que ele deixou e tentando o instalador
 echo         oficial pelo PowerShell (pode levar alguns minutos; nao feche esta janela)...
+taskkill /f /im Hermes-Setup.exe >nul 2>&1
 call :limpar
 set "HERMES_NONINTERACTIVE=1"
 powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol='Tls12'; iex (irm https://hermes-agent.nousresearch.com/install.ps1)"
