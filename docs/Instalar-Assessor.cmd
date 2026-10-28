@@ -20,7 +20,7 @@ set /a N=0
 if exist "%HH%\bin\hermes.exe" goto assistente
 set /a N+=1
 if %N% gtr 180 goto erro_hermes
-timeout /t 5 /nobreak >nul
+ping -n 6 127.0.0.1 >nul
 goto esperar
 
 :assistente
