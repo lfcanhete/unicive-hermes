@@ -903,7 +903,18 @@ class Janela:
         if u:
             estado["tg_robo"] = u.group(1)
         t = re.search(r"\d{5,15}:[\w-]{30,}", bruto)
-        if not t or t.group(0) == estado.get("tg_token"):
+        if not t:
+            # Texto colado que nao e token: explica em vez de ficar calado.
+            if bruto.strip() and "#" in bruto:
+                self.st_token.config(text="Isso é o código do Claude, não o token do Telegram. Copie a mensagem do BotFather "
+                                          "que tem o token (ou mande /token para ele) e cole aqui.", fg=ERRO)
+            elif len(bruto.strip()) > 8:
+                self.st_token.config(text="Isso não parece o token do Telegram. Ele tem números, dois-pontos e letras, assim: "
+                                          "7812345678:AAH... Copie a mensagem do BotFather e cole aqui.", fg=ERRO)
+            else:
+                self.st_token.config(text="")
+            return
+        if t.group(0) == estado.get("tg_token"):
             return
         if self.tarefa and self.tarefa.is_alive():
             # Uma verificacao ainda esta terminando: tenta de novo em seguida.
