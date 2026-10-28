@@ -1,2 +1,4 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+# Arquivos .cmd ficam com quebras de linha do Windows (o GitHub Pages serve o arquivo como esta no repositorio)
+*.cmd -text
