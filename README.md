@@ -1,15 +1,15 @@
-# UniCIVE · Pauta (Hermes pré-configurado)
+# UniCIVE · Assessor (Hermes pré-configurado)
 
-Assistente executiva da direção: briefing diário, resumo de e-mails, agenda, preparo de reuniões e rascunhos, com Google Workspace. Instala, configura e abre sozinha.
+Assessor executivo da direção: briefing diário, resumo de e-mails, agenda, preparo de reuniões e rascunhos, com Google Workspace. Instala, configura e abre sozinho.
 
 ## Instalador visual (recomendado)
 Uma janela guia o diretor em 6 passos: boas-vindas, instalação (sozinha), Claude (login no navegador; o código copiado é detectado sozinho), Google (login no navegador, sem colar nada), Telegram (robô próprio criado no BotFather; o instalador descobre o dono pela primeira mensagem e liga o gateway junto com o Windows) e pronto.
 
 1. Gere o arquivo que os diretores baixam:
    ```powershell
-   .\gerar-instalador.ps1 -ClientSecret "C:\caminho\client_secret.json" -Saida "..\Treinamento-Hermes\Instalar-Pauta.cmd"
+   .\gerar-instalador.ps1 -ClientSecret "C:\caminho\client_secret.json" -Saida "..\Treinamento-Hermes\Instalar-Assessor.cmd"
    ```
-2. O diretor baixa o `Instalar-Pauta.cmd` e dá dois cliques. Ele baixa o `instalador.ps1` deste repositório e abre a janela.
+2. O diretor baixa o `Instalar-Assessor.cmd` e dá dois cliques. Ele baixa o `instalador.ps1` deste repositório e abre a janela.
 
 Com `-ClientSecret`, o `.cmd` carrega a configuração do Google: é de uso interno e não pode ir para este repositório nem para um site público.
 Para conferir as telas sem instalar nada: `$env:UNICIVE_DEMO=1; .\instalador.ps1`.
@@ -21,9 +21,9 @@ Cole no PowerShell e aperte Enter:
 iex (irm https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main/install.ps1)
 ```
 
-O que acontece sozinho: instala o Hermes, configura o Claude, instala a Pauta e abre o navegador para o login do Claude (o único passo do diretor: entrar e autorizar). Depois abre a conversa, e a Pauta se apresenta e pergunta as preferências.
+O que acontece sozinho: instala o Hermes, configura o Claude, instala o Assessor e abre o navegador para o login do Claude (o único passo do diretor: entrar e autorizar). Depois abre a conversa, e o Assessor se apresenta e pergunta as preferências.
 
-**Por enquanto o Google Workspace (e-mail e agenda) não está conectado.** A Pauta trabalha com textos colados ou anexados na conversa. A integração com Google está pronta no instalador (variável `UNICIVE_GOOGLE`, veja abaixo) e pode ser ligada depois.
+**Por enquanto o Google Workspace (e-mail e agenda) não está conectado.** O Assessor trabalha com textos colados ou anexados na conversa. A integração com Google está pronta no instalador (variável `UNICIVE_GOOGLE`, veja abaixo) e pode ser ligada depois.
 
 macOS / Linux: `curl -fsSL https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main/install.sh | bash` (ainda não adaptado para Google pré-instalado).
 
@@ -38,8 +38,8 @@ macOS / Linux: `curl -fsSL https://raw.githubusercontent.com/lfcanhete/unicive-h
 
 ## Arquivos
 - `install.ps1`: instalador do Windows (se o instalador oficial parar no meio, o script repara sozinho).
-- `SOUL.md`: personalidade e regras da Pauta (só lê e rascunha; nada é enviado, aceito ou apagado sem confirmação).
-- `primeira-mensagem.txt`: o que a Pauta faz ao abrir pela primeira vez.
+- `SOUL.md`: personalidade e regras do Assessor (só lê e rascunha; nada é enviado, aceito ou apagado sem confirmação).
+- `primeira-mensagem.txt`: o que o Assessor faz ao abrir pela primeira vez.
 - `skills/`: skills de ata e de ofício.
 - `gerar-comando.ps1`: gera a linha com as credenciais (uso interno).
 

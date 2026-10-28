@@ -1,4 +1,4 @@
-# UniCIVE - Instalador do Hermes Agent + Pauta (Windows)
+# UniCIVE - Instalador do Hermes Agent + Assessor (Windows)
 # Uso:  iex (irm https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main/install.ps1)
 # Este script nunca usa "exit", para nao fechar a janela do PowerShell.
 
@@ -84,7 +84,7 @@ try {
     & $HermesExe config set --force agent.reasoning_effort low
     & $HermesExe config set auxiliary.title_generation.enabled false
 
-    Passo 3 "Instalando a Pauta e as skills da UniCIVE"
+    Passo 3 "Instalando o Assessor e as skills da UniCIVE"
     $soul = Join-Path $HermesHome "SOUL.md"
     if ((Test-Path $soul) -and -not (Test-Path "$soul.original")) { Copy-Item $soul "$soul.original" }
     Pegar "SOUL.md" $soul
@@ -120,7 +120,7 @@ try {
     Passo 5 "Pronto"
     $primeira = Join-Path $HermesHome "primeira-mensagem.txt"
     Pegar "primeira-mensagem.txt" $primeira
-    Write-Host "Abrindo a Pauta..." -ForegroundColor Green
+    Write-Host "Abrindo o Assessor..." -ForegroundColor Green
     & $HermesExe chat --query-file $primeira
 }
 catch {

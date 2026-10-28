@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# UniCIVE - Instalador do Hermes Agent + Pauta (macOS / Linux / WSL2)
+# UniCIVE - Instalador do Hermes Agent + Assessor (macOS / Linux / WSL2)
 # Uso:  curl -fsSL https://raw.githubusercontent.com/lfcanhete/unicive-hermes/main/install.sh | bash
 set -uo pipefail
 
@@ -23,7 +23,7 @@ passo 2 "Configurando o Claude como modelo"
 hermes config set model.provider anthropic
 hermes config set model.default "$MODELO"
 
-passo 3 "Instalando a Pauta e as skills da UniCIVE"
+passo 3 "Instalando o Assessor e as skills da UniCIVE"
 mkdir -p "$HERMES_HOME"
 [ -f "$HERMES_HOME/SOUL.md" ] && [ ! -f "$HERMES_HOME/SOUL.md.original" ] && cp "$HERMES_HOME/SOUL.md" "$HERMES_HOME/SOUL.md.original"
 curl -fsSL "$REPO/SOUL.md" -o "$HERMES_HOME/SOUL.md"
@@ -48,5 +48,5 @@ else
 fi
 
 passo 5 "Pronto"
-echo "Abrindo a Pauta. Na primeira conversa, diga: 'Pauta, configure meu Google Workspace'."
+echo "Abrindo o Assessor. Na primeira conversa, diga: 'Assessor, configure meu Google Workspace'."
 exec hermes < /dev/tty

@@ -1,5 +1,5 @@
-﻿# UNICIVE - Instalador visual da Pauta (Hermes Agent + Claude + Google + Telegram)
-# Aberto pelo Instalar-Pauta.cmd (gerado pelo gerar-instalador.ps1). Variaveis opcionais:
+﻿# UNICIVE - Instalador visual do Assessor (Hermes Agent + Claude + Google + Telegram)
+# Aberto pelo Instalar-Assessor.cmd (gerado pelo gerar-instalador.ps1). Variaveis opcionais:
 #   UNICIVE_GOOGLE   client_secret.json do Google em base64
 #   UNICIVE_DEMO=1   percorre as telas sem instalar nada (para conferir o visual)
 $ErrorActionPreference = "Continue"
@@ -150,7 +150,7 @@ $TarefaInstalar = {
         }
         Log "Atalho do Hermes criado na área de trabalho."
     }
-    if ($cfg.Demo -or (Test-Path $cfg.AppExe)) { Sub 1 "ok" } else { Log "O aplicativo não ficou pronto; a Pauta continua disponível pelo comando hermes."; Sub 1 "pulado" }
+    if ($cfg.Demo -or (Test-Path $cfg.AppExe)) { Sub 1 "ok" } else { Log "O aplicativo não ficou pronto; o Assessor continua disponível pelo comando hermes."; Sub 1 "pulado" }
 
     Sub 2 "ativo"
     [void](Executar $hx @("config", "set", "model.provider", "anthropic"))
@@ -251,7 +251,7 @@ $TarefaGoogle = {
                 if ($par.code -or $par.error) {
                     $ok = $par.code -and ($par.state -eq $state)
                     $msg = if ($ok) { "Pronto! O Google foi conectado. Pode fechar esta aba e voltar ao instalador." } else { "Não deu certo. Volte ao instalador e tente de novo." }
-                    $html = "<!doctype html><meta charset=utf-8><title>Pauta</title><body style=`"font-family:Segoe UI,sans-serif;background:#004A3B;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0`"><div style=`"text-align:center;max-width:520px;padding:24px`"><h1 style=`"color:#FFC571;font-weight:600`">Pauta &middot; UNICIVE</h1><p style=`"font-size:18px;line-height:1.5`">$msg</p></div>"
+                    $html = "<!doctype html><meta charset=utf-8><title>Assessor</title><body style=`"font-family:Segoe UI,sans-serif;background:#004A3B;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0`"><div style=`"text-align:center;max-width:520px;padding:24px`"><h1 style=`"color:#FFC571;font-weight:600`">Assessor &middot; UNICIVE</h1><p style=`"font-size:18px;line-height:1.5`">$msg</p></div>"
                     $corpo = [Text.Encoding]::UTF8.GetBytes($html)
                     $cab = [Text.Encoding]::ASCII.GetBytes("HTTP/1.1 200 OK`r`nContent-Type: text/html; charset=utf-8`r`nContent-Length: $($corpo.Length)`r`nConnection: close`r`n`r`n")
                     $fluxo.Write($cab, 0, $cab.Length); $fluxo.Write($corpo, 0, $corpo.Length); $fluxo.Flush()
@@ -311,10 +311,10 @@ $TarefaTelegram = {
     $sync.TgNome = $de.first_name
     Log "Mensagem recebida de $($de.first_name) (id $($de.id))."
     SalvarEnv @{ TELEGRAM_BOT_TOKEN = $sync.TgToken; TELEGRAM_ALLOWED_USERS = "$($de.id)"; TELEGRAM_HOME_CHANNEL = "$($de.id)" }
-    $texto = "Olá, $($de.first_name)! Aqui é a Pauta, assistente da direção do UNICIVE. A partir de agora você também pode falar comigo por aqui."
+    $texto = "Olá, $($de.first_name)! Aqui é o Assessor, assistente da direção do UNICIVE. A partir de agora você também pode falar comigo por aqui."
     [void](Invoke-RestMethod -Method Post "$base/sendMessage" -ContentType "application/json; charset=utf-8" -Body (JsonUtf8 @{ chat_id = $de.id; text = $texto }) -UseBasicParsing)
     $hx = AcharHermes
-    Log "Deixando a Pauta ligada no Telegram (inicia junto com o Windows)..."
+    Log "Deixando o Assessor ligado no Telegram (inicia junto com o Windows)..."
     [void](Executar $hx @("gateway", "install", "--if-missing", "--start-now", "--start-on-login"))
     [void](Executar $hx @("gateway", "restart"))
 }
@@ -323,7 +323,7 @@ $TarefaTelegram = {
 [xml]$xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Instalar a Pauta · UNICIVE" Width="940" Height="736" WindowStartupLocation="CenterScreen"
+        Title="Instalar o Assessor · UNICIVE" Width="940" Height="736" WindowStartupLocation="CenterScreen"
         ResizeMode="CanMinimize" Background="#F0F8F4" FontFamily="Segoe UI" FontSize="14" Foreground="#122B23">
   <Window.Resources>
     <Style x:Key="Primario" TargetType="Button">
@@ -377,7 +377,7 @@ $TarefaTelegram = {
       <DockPanel Margin="26,30">
         <StackPanel DockPanel.Dock="Top">
           <TextBlock Text="UNICIVE · DIREÇÃO" Foreground="#FFC571" FontWeight="Bold" FontSize="11"/>
-          <TextBlock Text="Pauta" Foreground="White" FontSize="34" FontFamily="Georgia" Margin="0,6,0,0"/>
+          <TextBlock Text="Assessor" Foreground="White" FontSize="34" FontFamily="Georgia" Margin="0,6,0,0"/>
           <TextBlock Text="Instalação guiada" Foreground="#A8CFC0"/>
         </StackPanel>
         <TextBlock DockPanel.Dock="Bottom" Text="Dúvidas? Chame o Luiz Fernando." Foreground="#A8CFC0" FontSize="12" TextWrapping="Wrap"/>
@@ -396,7 +396,7 @@ $TarefaTelegram = {
         <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
           <Grid>
             <StackPanel x:Name="P0">
-              <TextBlock TextWrapping="Wrap" FontSize="15" Text="Este instalador deixa a Pauta pronta para usar: instala o Hermes, conecta o Claude, o Google e o Telegram. No final, é só abrir e conversar."/>
+              <TextBlock TextWrapping="Wrap" FontSize="15" Text="Este instalador deixa o Assessor pronto para usar: instala o Hermes, conecta o Claude, o Google e o Telegram. No final, é só abrir e conversar."/>
               <TextBlock Margin="0,20,0,6" FontWeight="SemiBold" Text="Tenha por perto:"/>
               <TextBlock Margin="0,3" Text="•   a sua conta do Claude"/>
               <TextBlock Margin="0,3" Text="•   a sua conta @unicive.edu.br"/>
@@ -412,7 +412,7 @@ $TarefaTelegram = {
               <TextBlock x:Name="TxtErroInstala" Foreground="#B0472F" TextWrapping="Wrap" Margin="0,12,0,0" Visibility="Collapsed"/>
             </StackPanel>
             <StackPanel x:Name="P2" Visibility="Collapsed">
-              <TextBlock TextWrapping="Wrap" FontSize="15" Text="O Claude é o cérebro da Pauta. Conecte a sua conta em três passos:"/>
+              <TextBlock TextWrapping="Wrap" FontSize="15" Text="O Claude é o cérebro do Assessor. Conecte a sua conta em três passos:"/>
               <Border Style="{StaticResource Cartao}">
                 <StackPanel>
                   <TextBlock TextWrapping="Wrap" Text="1.  Clique em Entrar com o Claude. O navegador vai abrir."/>
@@ -431,7 +431,7 @@ $TarefaTelegram = {
               <TextBlock x:Name="TxtClaude" Margin="0,14,0,0" TextWrapping="Wrap" FontWeight="SemiBold"/>
             </StackPanel>
             <StackPanel x:Name="P3" Visibility="Collapsed">
-              <TextBlock x:Name="TxtGoogleIntro" TextWrapping="Wrap" FontSize="15" Text="Com o Google conectado, a Pauta lê seus e-mails, sua agenda e seus documentos para fazer briefings e rascunhos. Ela nunca envia nada sem você pedir."/>
+              <TextBlock x:Name="TxtGoogleIntro" TextWrapping="Wrap" FontSize="15" Text="Com o Google conectado, o Assessor lê seus e-mails, sua agenda e seus documentos para fazer briefings e rascunhos. Ele nunca envia nada sem você pedir."/>
               <Border x:Name="CartaoGoogle" Style="{StaticResource Cartao}">
                 <StackPanel>
                   <TextBlock TextWrapping="Wrap" Text="1.  Clique em Entrar com o Google."/>
@@ -443,11 +443,11 @@ $TarefaTelegram = {
               <TextBlock x:Name="TxtGoogle" Margin="0,14,0,0" TextWrapping="Wrap" FontWeight="SemiBold"/>
             </StackPanel>
             <StackPanel x:Name="P4" Visibility="Collapsed">
-              <TextBlock TextWrapping="Wrap" FontSize="15" Text="Pelo Telegram você fala com a Pauta de qualquer lugar. Você vai criar um robô só seu:"/>
+              <TextBlock TextWrapping="Wrap" FontSize="15" Text="Pelo Telegram você fala com o Assessor de qualquer lugar. Você vai criar um robô só seu:"/>
               <Border Style="{StaticResource Cartao}">
                 <StackPanel>
                   <TextBlock FontWeight="SemiBold" Text="1.  Crie o seu robô"/>
-                  <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" Text="No BotFather, envie /newbot. Dê um nome (ex.: Pauta Marcela) e depois um usuário que termine em bot (ex.: pauta_marcela_bot). Ele responde com um token: copie a linha com o token."/>
+                  <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" Text="No BotFather, envie /newbot. Dê um nome (ex.: Assessor Marcela) e depois um usuário que termine em bot (ex.: pauta_marcela_bot). Ele responde com um token: copie a linha com o token."/>
                   <Button x:Name="BtnBotFather" Style="{StaticResource Secundario}" Content="Abrir o BotFather" HorizontalAlignment="Left" Margin="0,10,0,0" Padding="18,7"/>
                 </StackPanel>
               </Border>
@@ -471,9 +471,9 @@ $TarefaTelegram = {
               </Border>
             </StackPanel>
             <StackPanel x:Name="P5" Visibility="Collapsed">
-              <TextBlock TextWrapping="Wrap" FontSize="15" Text="A Pauta está instalada e configurada. Na primeira conversa ela se apresenta e pergunta as suas preferências."/>
+              <TextBlock TextWrapping="Wrap" FontSize="15" Text="O Assessor está instalado e configurado. Na primeira conversa ele se apresenta e pergunta as suas preferências."/>
               <StackPanel x:Name="ListaResumo" Margin="0,18,0,0"/>
-              <Button x:Name="BtnAbrir" Style="{StaticResource Primario}" Content="Abrir a Pauta" HorizontalAlignment="Left" Margin="0,22,0,0"/>
+              <Button x:Name="BtnAbrir" Style="{StaticResource Primario}" Content="Abrir o Assessor" HorizontalAlignment="Left" Margin="0,22,0,0"/>
               <TextBlock x:Name="TxtFinal" Margin="0,16,0,0" TextWrapping="Wrap" Foreground="#006652"/>
             </StackPanel>
           </Grid>
@@ -526,7 +526,7 @@ function Marcar($item, [string]$estado) {
 }
 
 $nomesPassos = @("Boas-vindas", "Instalação", "Claude", "Google", "Telegram", "Pronto")
-$titulos = @("Vamos deixar a Pauta pronta", "Instalando o Hermes e a Pauta", "Conecte o Claude", "Conecte o Google", "Conecte o Telegram", "Tudo pronto!")
+$titulos = @("Vamos deixar o Assessor pronto", "Instalando o Hermes e o Assessor", "Conecte o Claude", "Conecte o Google", "Conecte o Telegram", "Tudo pronto!")
 $statusPadrao = @("Pronto para começar", "Instalando... pode levar alguns minutos", "Aguardando o login do Claude", "Aguardando o login do Google", "Aguardando o Telegram", "Instalação concluída")
 $passos = @()
 for ($i = 0; $i -lt $nomesPassos.Count; $i++) {
@@ -534,7 +534,7 @@ for ($i = 0; $i -lt $nomesPassos.Count; $i++) {
     [void]$ListaPassos.Children.Add($it.Painel); Marcar $it "pendente"; $passos += $it
 }
 $subs = @()
-$nomesSubs = @("Baixar e instalar o Hermes", "Instalar o aplicativo Hermes", "Configurar o Claude Sonnet 5.5 e a Pauta", "Preparar a conexão com o Google")
+$nomesSubs = @("Baixar e instalar o Hermes", "Instalar o aplicativo Hermes", "Configurar o Claude Sonnet 5.5 e o Assessor", "Preparar a conexão com o Google")
 for ($i = 0; $i -lt $nomesSubs.Count; $i++) {
     $it = NovoItem $nomesSubs[$i] "$($i + 1)" $false
     [void]$ListaInstala.Children.Add($it.Painel); Marcar $it "pendente"; $subs += $it
@@ -585,7 +585,7 @@ function IrPara([int]$i) {
         }
         3 {
             if (-not $cfg.Google) {
-                $TxtGoogleIntro.Text = "Este instalador veio sem a configuração do Google. Peça à organização o instalador completo para conectar e-mail e agenda. Por enquanto a Pauta trabalha com o que você colar na conversa."
+                $TxtGoogleIntro.Text = "Este instalador veio sem a configuração do Google. Peça à organização o instalador completo para conectar e-mail e agenda. Por enquanto o Assessor trabalha com o que você colar na conversa."
                 $CartaoGoogle.Visibility = "Collapsed"; $BtnGoogle.Visibility = "Collapsed"; $BtnPular.Visibility = "Collapsed"; $BtnAvancar.IsEnabled = $true
             } elseif (-not $cfg.Demo -and (Test-Path (Join-Path $HermesHome "google_token.json"))) {
                 Status $TxtGoogle "✓  Este computador já está conectado ao Google. Pode continuar, ou entrar de novo com outra conta." "ok"
@@ -623,7 +623,7 @@ function IniciarInstalacao {
 function MontarResumo {
     $ListaResumo.Children.Clear()
     $linhas = @(
-        @("Hermes e Pauta instalados", "ok"),
+        @("Hermes e Assessor instalados", "ok"),
         @("Claude conectado (Sonnet 5.5)", $script:feito[2]),
         @($(if ($sync.GoogleEmail) { "Google conectado: $($sync.GoogleEmail)" } elseif ($script:feito[3] -eq "ok") { "Google conectado" } else { "Google: fica para depois" }), $script:feito[3]),
         @($(if ($sync.TgBot -and $script:feito[4] -eq "ok") { "Telegram conectado: @$($sync.TgBot)" } else { "Telegram: fica para depois" }), $script:feito[4])
@@ -632,7 +632,7 @@ function MontarResumo {
         $estado = $(if ($l[1] -eq "ok") { "ok" } else { "pulado" })
         $it = NovoItem $l[0] "•" $false; Marcar $it $estado; [void]$ListaResumo.Children.Add($it.Painel)
     }
-    $TxtFinal.Text = $(if ($script:feito[4] -eq "ok") { "No celular, procure @$($sync.TgBot) no Telegram: a Pauta já mandou uma mensagem para você." } else { "Nas próximas vezes, abra pelo atalho Hermes na área de trabalho." })
+    $TxtFinal.Text = $(if ($script:feito[4] -eq "ok") { "No celular, procure @$($sync.TgBot) no Telegram: o Assessor já mandou uma mensagem para você." } else { "Nas próximas vezes, abra pelo atalho Hermes na área de trabalho." })
 }
 
 # ---------- Botoes ----------
@@ -695,7 +695,7 @@ function VerificarToken {
         Rodar $TarefaTelegram {
             if ($sync.Erro) { if ($sync.Erro -ne "Cancelado.") { Status $TxtTelegram "Não deu certo: $($sync.Erro)" "erro" } }
             else {
-                Status $TxtTelegram "✓  Recebi o seu oi, $($sync.TgNome)! A Pauta já respondeu por lá e fica ligada sempre que o computador estiver ligado." "ok"
+                Status $TxtTelegram "✓  Recebi o seu oi, $($sync.TgNome)! O Assessor já respondeu por lá e fica ligado sempre que o computador estiver ligado." "ok"
                 Concluir 4 "ok"; $BtnAvancar.IsEnabled = $true; $BtnPular.Visibility = "Collapsed"
             }
         }
@@ -765,7 +765,7 @@ $timer.Add_Tick({
 
 $win.Add_Closing({ $sync.Cancelar = $true; $timer.Stop() })
 $win.Add_ContentRendered({
-    # Aberto pelo Instalar-Pauta.cmd: esconde a janela preta do PowerShell.
+    # Aberto pelo Instalar-Assessor.cmd: esconde a janela preta do PowerShell.
     if ($env:UNICIVE_LAUNCHER) {
         try {
             Add-Type -Name Janela -Namespace Unicive -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);'
